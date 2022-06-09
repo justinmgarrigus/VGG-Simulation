@@ -37,10 +37,39 @@ for x in range(224):
         image_input[0][y][x][2] = image_input[0][y][x][0] 
         image_input[0][y][x][0] = temp 
 
-# Feedforward
-x = model.layers[0](image_input) # Setting inputs 
-for layer in model.layers[1:]:   # Feed forward each layer 
-    x = layer(x)
-  
-# Displays output layer 
-print(decode_predictions(x.numpy()))
+
+def conv_2D(layer, inputs):
+    outputs = layer(inputs) 
+    return outputs
+    
+
+def max_pooling_2D(layer, inputs): 
+    outputs = layer(inputs) 
+    return outputs 
+    
+    
+def flatten(layer, inputs): 
+    outputs = layer(inputs) 
+    return outputs 
+    
+    
+def dense(layer, inputs): 
+    outputs = layer(inputs) 
+    return outputs 
+
+
+if __name__ == '__main__': 
+    # Feedforward
+    x = model.layers[0](image_input) # Setting inputs 
+    for layer in model.layers[1:]:   # Feed forward each layer 
+        name = layer.__class__.__name__
+        if name == 'Conv2D':         x = conv_2D(layer, x)
+        elif name == 'MaxPooling2D': x = max_pooling_2D(layer, x) 
+        elif name == 'Flatten':      x = flatten(layer, x) 
+        elif name == 'Dense':        x = dense(layer, x)
+        else: 
+            print('Unrecognized layer:', name)
+            sys.exit(0) 
+      
+    # Displays output layer 
+    print(decode_predictions(x.numpy()))
