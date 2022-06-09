@@ -58,20 +58,20 @@ def max_pooling_2D(layer, inputs):
     
     
 def flatten(layer, inputs): 
-    # print("Flatten:") 
-    # print("  Input:", inputs.shape)
-    outputs = layer(inputs) 
-    # print("  Output:", outputs.shape) 
-    # print("  output_shape:", layer.output_shape) 
-    return outputs 
+    result_array = np.empty(shape=shape_fix(layer.output_shape)) 
+    i = 0 
+    for x in np.nditer(inputs.numpy()): 
+        result_array[0][i] = x
+        i += 1 
+    eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
+    return eager_tensor 
     
     
 def dense(layer, inputs):
-#    outputs = layer(inputs) 
-#    print(type(outputs), layer.output_shape) 
-    new_array = np.empty(shape=shape_fix(layer.output_shape)) 
-    eager_tensor = tf.convert_to_tensor(new_array, dtype=np.float32) 
-    return eager_tensor 
+    outputs = layer(inputs) 
+#    new_array = np.empty(shape=shape_fix(layer.output_shape)) 
+#    eager_tensor = tf.convert_to_tensor(new_array, dtype=np.float32) 
+    return outputs 
 
 
 if __name__ == '__main__': 
