@@ -6,6 +6,7 @@ from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predict
 from PIL import Image 
 import numpy as np
 import sys
+import tensorflow as tf 
 
 model = VGG16(weights='imagenet') 
 im = Image.open('data/dog.jpg') 
@@ -38,6 +39,14 @@ for x in range(224):
         image_input[0][y][x][0] = temp 
 
 
+def shape_fix(shape): 
+    l = list(shape) 
+    for item in range(len(shape)): 
+        if shape[item] == None: l[item] = 1 
+        else: l[item] = shape[item]
+    return tuple(l) 
+
+
 def conv_2D(layer, inputs):
     outputs = layer(inputs) 
     return outputs
@@ -49,13 +58,20 @@ def max_pooling_2D(layer, inputs):
     
     
 def flatten(layer, inputs): 
+    # print("Flatten:") 
+    # print("  Input:", inputs.shape)
     outputs = layer(inputs) 
+    # print("  Output:", outputs.shape) 
+    # print("  output_shape:", layer.output_shape) 
     return outputs 
     
     
-def dense(layer, inputs): 
-    outputs = layer(inputs) 
-    return outputs 
+def dense(layer, inputs):
+#    outputs = layer(inputs) 
+#    print(type(outputs), layer.output_shape) 
+    new_array = np.empty(shape=shape_fix(layer.output_shape)) 
+    eager_tensor = tf.convert_to_tensor(new_array, dtype=np.float32) 
+    return eager_tensor 
 
 
 if __name__ == '__main__': 
