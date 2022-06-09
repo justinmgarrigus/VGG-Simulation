@@ -8,7 +8,7 @@ import numpy as np
 import sys
 
 model = VGG16(weights='imagenet') 
-im = Image.open('dog.jpg') 
+im = Image.open('data/dog.jpg') 
 size = im.size
 
 print(model.summary()) 
@@ -40,10 +40,6 @@ for x in range(224):
 # Feedforward
 x = model.layers[0](image_input) # Setting inputs 
 for layer in model.layers[1:]:   # Feed forward each layer 
-    if (layertype == "Conv2D") 
-        conv2D(x) 
-    elif (layertype == "MaxPooling2D") 
-        maxPooling2D(x) 
     x = layer(x)
   
 # Displays output layer 
