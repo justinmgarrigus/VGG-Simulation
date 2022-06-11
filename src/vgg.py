@@ -1,15 +1,16 @@
 print("Started") 
 
+from audioop import bias
 from keras.applications.vgg16 import VGG16 
-from tensorflow.keras.preprocessing import image 
-from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
+from keras.preprocessing import image 
+from keras.applications.vgg16 import preprocess_input, decode_predictions
 from PIL import Image 
 import numpy as np
 import sys
 import tensorflow as tf 
 
 model = VGG16(weights='imagenet') 
-im = Image.open('data/dog.jpg') 
+im = Image.open('/Users/bora/Desktop/dog.jpg') 
 size = im.size
 
 print(model.summary()) 
@@ -38,13 +39,20 @@ for x in range(224):
         image_input[0][y][x][2] = image_input[0][y][x][0] 
         image_input[0][y][x][0] = temp 
 
+def relu(X):
+   return np.maximum(0,X)
+
+def softmax(X):
+    expo = np.exp(X)
+    expo_sum = np.sum(np.exp(X))
+    return expo/expo_sum
 
 def shape_fix(shape): 
     l = list(shape) 
     for item in range(len(shape)): 
         if shape[item] == None: l[item] = 1 
         else: l[item] = shape[item]
-    return tuple(l) 
+    return tuple(l)
 
 
 def conv_2D(layer, inputs):
@@ -68,10 +76,19 @@ def flatten(layer, inputs):
     
     
 def dense(layer, inputs):
-    outputs = layer(inputs) 
-#    new_array = np.empty(shape=shape_fix(layer.output_shape)) 
-#    eager_tensor = tf.convert_to_tensor(new_array, dtype=np.float32) 
-    return outputs 
+    outputs = layer(inputs)
+    result_array = np.zeros(shape=shape_fix(layer.output_shape))
+    matrix_mul_array = np.matmul(inputs.numpy(), layer.get_weights()[0])
+    bias_added_array = matrix_mul_array + layer.get_weights()[1]
+    if ('relu' in str(layer.activation)):
+        activation_function_array = relu(bias_added_array)
+    elif ('softmax' in str(layer.activation)):
+        activation_function_array = softmax(bias_added_array)
+    else: 
+        print('Unrecognized activation function:', layer.activation)
+        sys.exit(0)   
+    eager_tensor = tf.convert_to_tensor(activation_function_array, dtype=np.float32)
+    return eager_tensor
 
 
 if __name__ == '__main__': 
@@ -89,3 +106,4 @@ if __name__ == '__main__':
       
     # Displays output layer 
     print(decode_predictions(x.numpy()))
+
