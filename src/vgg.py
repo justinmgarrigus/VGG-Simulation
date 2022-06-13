@@ -1,4 +1,7 @@
-print("Started") 
+# Disables initial "cuda device not found" warning message 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 from keras.applications.vgg16 import VGG16 
 from tensorflow.keras.preprocessing import image 
@@ -7,6 +10,12 @@ from PIL import Image
 import numpy as np
 import sys
 import tensorflow as tf 
+from scipy.signal import convolve 
+import random 
+
+import time
+def current_milli_time():
+    return round(time.time() * 1000)
 
 model = VGG16(weights='imagenet') 
 im = Image.open('data/dog.jpg') 
@@ -48,8 +57,62 @@ def shape_fix(shape):
 
 
 def conv_2D(layer, inputs):
+    print('Applying convolution') 
+    epsilon = 0.01 # Accepted error 
+    max_iters = 1000000 # How many iterations it takes to calculate for ~10 seconds, modify as needed
+    
+    # Actual output 
     outputs = layer(inputs) 
-    return outputs
+    outputnp = outputs.numpy()
+    
+    # Probability of replacing an actual output
+    iters = outputs.shape[1] * outputs.shape[2] * outputs.shape[3] * inputs.shape[3] 
+    probability = max_iters / iters
+    print('Probability:', str(round(probability, 3))) 
+    
+    # Add padding so output is the same size as input 
+    inputs = np.pad(inputs, [(0, 0), (1, 1), (1, 1), (0, 0)], mode='constant') # count, x, y, channel
+    
+    kernel = layer.kernel.numpy() 
+    weights = layer.weights[1].numpy() 
+    
+    counter = 0 
+    prev_value = 0
+    for x in range(outputs.shape[1]):
+        # Progress indicator 
+        if int(x / outputs.shape[1] * 10) != prev_value: 
+            prev_value = int(x / outputs.shape[1] * 10) 
+            print(str(prev_value * 10) + '%')
+        
+        for y in range(outputs.shape[2]):
+            result = 0 
+            for filter_index in range(outputs.shape[3]): 
+                # Chance of replacing expected value with custom calculated value 
+                if random.random() < probability: 
+                    result = weights[filter_index]
+                    for kernel_x in range(layer.kernel_size[0]): 
+                        for kernel_y in range(layer.kernel_size[1]): 
+                            for channel in range(inputs.shape[3]): 
+                                result += kernel[kernel_x][kernel_y][channel][filter_index] * inputs[0][x + kernel_x][y + kernel_y][channel]
+                    if result < 0: result = 0 
+                    
+                    # Compare expected vs actual value, exit if difference is too large 
+                    expected = outputnp[0][x][y][filter_index] 
+                    diff = abs(result - expected) 
+                    if diff > epsilon:
+                        print('Convolution incorrect!', result, expected, diff)
+                        sys.exit(0) 
+                        
+                    # Replace output with our own calculated value
+                    outputnp[0][x][y][filter_index] = result
+                    counter += 1
+    
+    max_items = outputs.shape[1] * outputs.shape[2] * outputs.shape[3]
+    print(str(counter) + '/' + str(max_items), 'items replaced (' + str(round(counter / max_items * 100, 1)) + '%)')  
+    
+    # Replace with required data type 
+    eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)
+    return eager_tensor
     
 
 def max_pooling_2D(layer, inputs): 
@@ -69,8 +132,6 @@ def flatten(layer, inputs):
     
 def dense(layer, inputs):
     outputs = layer(inputs) 
-#    new_array = np.empty(shape=shape_fix(layer.output_shape)) 
-#    eager_tensor = tf.convert_to_tensor(new_array, dtype=np.float32) 
     return outputs 
 
 
@@ -88,4 +149,7 @@ if __name__ == '__main__':
             sys.exit(0) 
       
     # Displays output layer 
-    print(decode_predictions(x.numpy()))
+    print('Predictions:') 
+    pred = decode_predictions(x.numpy()) 
+    for i in range(5):
+        print(' ', pred[0][i]) 
