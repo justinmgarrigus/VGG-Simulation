@@ -1,13 +1,16 @@
 print("Started") 
 
 from audioop import bias
+from cmath import inf
+from unittest import result
 from keras.applications.vgg16 import VGG16 
 from keras.preprocessing import image 
 from keras.applications.vgg16 import preprocess_input, decode_predictions
 from PIL import Image 
 import numpy as np
 import sys
-import tensorflow as tf 
+import tensorflow as tf
+import random
 
 model = VGG16(weights='imagenet') 
 im = Image.open('/Users/bora/Desktop/dog.jpg') 
@@ -60,9 +63,29 @@ def conv_2D(layer, inputs):
     return outputs
     
 
-def max_pooling_2D(layer, inputs): 
-    outputs = layer(inputs) 
-    return outputs 
+def max_pooling_2D(layer, inputs):
+    probability = 0.005 
+    outputs = layer(inputs)
+    outputsnp = outputs.numpy()
+    
+
+    for offset_x in range (0, inputs.shape[1], 2):
+        print(offset_x)
+        for offset_y in range (0, inputs.shape[1], 2):
+            for z in range (0, inputs.shape[3]):
+                    if(probability > random.random()):
+                        max_value = float('-inf')
+                        for kernel_x in range (2):
+                            for kernel_y in range (2):
+                                if inputs[0][offset_x + kernel_x][offset_y + kernel_y][z] > max_value:
+                                    max_value = inputs[0][offset_x + kernel_x][offset_y + kernel_y][z]
+                        outputsnp[0][offset_x//2][offset_y//2][z] = max_value
+
+
+    
+    eager_tensor = tf.convert_to_tensor(outputs, dtype=np.float32)
+    return eager_tensor 
+    
     
     
 def flatten(layer, inputs): 
@@ -87,8 +110,10 @@ def dense(layer, inputs):
     else: 
         print('Unrecognized activation function:', layer.activation)
         sys.exit(0)   
+
     eager_tensor = tf.convert_to_tensor(activation_function_array, dtype=np.float32)
     return eager_tensor
+
 
 
 if __name__ == '__main__': 
