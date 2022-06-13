@@ -3,22 +3,25 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
+from audioop import bias
+from cmath import inf
+from unittest import result
 from keras.applications.vgg16 import VGG16 
-from tensorflow.keras.preprocessing import image 
-from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
+from keras.preprocessing import image 
+from keras.applications.vgg16 import preprocess_input, decode_predictions
 from PIL import Image 
 import numpy as np
 import sys
 import tensorflow as tf 
-from scipy.signal import convolve 
 import random 
 
 import time
 def current_milli_time():
     return round(time.time() * 1000)
 
+
 model = VGG16(weights='imagenet') 
-im = Image.open('data/dog.jpg') 
+im = Image.open('/Users/bora/Desktop/dog.jpg') 
 size = im.size
 
 print(model.summary()) 
@@ -48,12 +51,22 @@ for x in range(224):
         image_input[0][y][x][0] = temp 
 
 
+def relu(X):
+   return np.maximum(0,X)
+
+
+def softmax(X):
+    expo = np.exp(X)
+    expo_sum = np.sum(np.exp(X))
+    return expo/expo_sum
+
+
 def shape_fix(shape): 
     l = list(shape) 
     for item in range(len(shape)): 
         if shape[item] == None: l[item] = 1 
         else: l[item] = shape[item]
-    return tuple(l) 
+    return tuple(l)
 
 
 def conv_2D(layer, inputs):
@@ -115,11 +128,27 @@ def conv_2D(layer, inputs):
     return eager_tensor
     
 
-def max_pooling_2D(layer, inputs): 
-    outputs = layer(inputs) 
-    return outputs 
+def max_pooling_2D(layer, inputs):
+    probability = 0.005 
+    outputs = layer(inputs)
+    outputsnp = outputs.numpy()
     
+    for offset_x in range (0, inputs.shape[1], 2):
+        print(offset_x)
+        for offset_y in range (0, inputs.shape[1], 2):
+            for z in range (0, inputs.shape[3]):
+                    if(probability > random.random()):
+                        max_value = float('-inf')
+                        for kernel_x in range (2):
+                            for kernel_y in range (2):
+                                if inputs[0][offset_x + kernel_x][offset_y + kernel_y][z] > max_value:
+                                    max_value = inputs[0][offset_x + kernel_x][offset_y + kernel_y][z]
+                        outputsnp[0][offset_x//2][offset_y//2][z] = max_value
+
+    eager_tensor = tf.convert_to_tensor(outputs, dtype=np.float32)
+    return eager_tensor 
     
+        
 def flatten(layer, inputs): 
     result_array = np.empty(shape=shape_fix(layer.output_shape)) 
     i = 0 
@@ -131,8 +160,20 @@ def flatten(layer, inputs):
     
     
 def dense(layer, inputs):
-    outputs = layer(inputs) 
-    return outputs 
+    outputs = layer(inputs)
+    result_array = np.zeros(shape=shape_fix(layer.output_shape))
+    matrix_mul_array = np.matmul(inputs.numpy(), layer.get_weights()[0])
+    bias_added_array = matrix_mul_array + layer.get_weights()[1]
+    if ('relu' in str(layer.activation)):
+        activation_function_array = relu(bias_added_array)
+    elif ('softmax' in str(layer.activation)):
+        activation_function_array = softmax(bias_added_array)
+    else: 
+        print('Unrecognized activation function:', layer.activation)
+        sys.exit(0)   
+
+    eager_tensor = tf.convert_to_tensor(activation_function_array, dtype=np.float32)
+    return eager_tensor
 
 
 if __name__ == '__main__': 
@@ -148,7 +189,7 @@ if __name__ == '__main__':
             print('Unrecognized layer:', name)
             sys.exit(0) 
       
-    # Displays output layer 
+    # Displays output layer
     print('Predictions:') 
     pred = decode_predictions(x.numpy()) 
     for i in range(5):
