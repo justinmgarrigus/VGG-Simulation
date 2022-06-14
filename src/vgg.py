@@ -2,6 +2,7 @@ print("Started")
 
 from audioop import bias
 from cmath import inf
+from ctypes import LibraryLoader
 from unittest import result
 from keras.applications.vgg16 import VGG16 
 from keras.preprocessing import image 
@@ -64,27 +65,24 @@ def conv_2D(layer, inputs):
     
 
 def max_pooling_2D(layer, inputs):
-    probability = 0.005 
     outputs = layer(inputs)
+    inputsnp = inputs.numpy()
     outputsnp = outputs.numpy()
     
-
-    for offset_x in range (0, inputs.shape[1], 2):
-        print(offset_x)
-        for offset_y in range (0, inputs.shape[1], 2):
-            for z in range (0, inputs.shape[3]):
-                    if(probability > random.random()):
-                        max_value = float('-inf')
-                        for kernel_x in range (2):
-                            for kernel_y in range (2):
-                                if inputs[0][offset_x + kernel_x][offset_y + kernel_y][z] > max_value:
-                                    max_value = inputs[0][offset_x + kernel_x][offset_y + kernel_y][z]
-                        outputsnp[0][offset_x//2][offset_y//2][z] = max_value
+    for offset_x in range (0, inputsnp.shape[1], 2):
+        for offset_y in range (0, inputsnp.shape[1], 2):
+            for z in range (0, inputsnp.shape[3]):
+                max_value = float('-inf')
+                for kernel_x in range (2):
+                    for kernel_y in range (2):
+                        if inputsnp[0][offset_x + kernel_x][offset_y + kernel_y][z] > max_value:
+                            max_value = inputsnp[0][offset_x + kernel_x][offset_y + kernel_y][z]
+                outputsnp[0][offset_x//2][offset_y//2][z] = max_value
 
 
     
-    eager_tensor = tf.convert_to_tensor(outputs, dtype=np.float32)
-    return eager_tensor 
+    eager_tensor = tf.convert_to_tensor(outputsnp, dtype=np.float32)
+    return eager_tensor
     
     
     
@@ -101,12 +99,23 @@ def flatten(layer, inputs):
 def dense(layer, inputs):
     outputs = layer(inputs)
     result_array = np.zeros(shape=shape_fix(layer.output_shape))
-    matrix_mul_array = np.matmul(inputs.numpy(), layer.get_weights()[0])
-    bias_added_array = matrix_mul_array + layer.get_weights()[1]
+    inputsnp = inputs.numpy()
+    weightsnp = layer.get_weights()[0]
+
+    for i in range(len(inputsnp)):
+    # iterating by column by B
+        for j in range(len(weightsnp[0])):
+            # iterating by rows of B
+            for k in range(len(weightsnp)):
+                result_array[i][j] += inputsnp[i][k] * weightsnp[k][j]
+
+
+    # matrix_mul_array = np.matmul(inputs.numpy(), layer.get_weights()[0])
+    bias_added_array = result_array + layer.get_weights()[1]
     if ('relu' in str(layer.activation)):
         activation_function_array = relu(bias_added_array)
     elif ('softmax' in str(layer.activation)):
-        activation_function_array = softmax(bias_added_array)
+       activation_function_array = softmax(bias_added_array)
     else: 
         print('Unrecognized activation function:', layer.activation)
         sys.exit(0)   
