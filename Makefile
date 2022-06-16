@@ -1,23 +1,26 @@
-all: 
-	gcc src/vgg.c -o "vgg"
+pre-build: 
+	mkdir -p obj 
+	mkdir -p bin 
 
-c: 
-	clear
-	./vgg
+c: pre-build
+	gcc -o obj/vgg.o -c src/vgg.c 
+	gcc -o bin/vgg obj/vgg.o
+	./bin/vgg
 
 python: 
-	clear 
 	python3 src/vgg.py
 
-json: 
-	mkdir obj
+json: pre-build
 	gcc -o obj/json.o -c lib/json-parser/json.c
 	gcc -o obj/json_test.o -Ilib/json-parser -c src/json_test.c
-	gcc -o json_test obj/json_test.o obj/json.o -lm
-	./json_test data/imagenet_class_index.json
+	gcc -o bin/json_test obj/json_test.o obj/json.o -lm
+	./bin/json_test data/imagenet_class_index.json
 
 clean: 
 	rm -f vgg
 	rm -f json_test 
 	rm -f obj/*.o
+	rm -f bin/*
 	rm -rf obj
+	rm -rf bin 
+	
