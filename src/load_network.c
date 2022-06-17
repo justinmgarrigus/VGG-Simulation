@@ -69,6 +69,12 @@ void load_network() {
             }
         }
 	}
-	
 	free(buffer); 
 }
+
+/*
+int main() {
+
+    load_network();
+}
+*/
