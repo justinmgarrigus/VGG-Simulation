@@ -4,7 +4,9 @@ pre-build:
 
 c: pre-build
 	gcc -o obj/vgg.o -c src/vgg.c 
-	gcc -o bin/vgg obj/vgg.o
+	gcc -o obj/network.o -c src/network.c 
+	gcc -o obj/layer.o -c src/layer.c 
+	gcc -o bin/vgg obj/vgg.o obj/network.o obj/layer.o
 	./bin/vgg
 
 python: 
