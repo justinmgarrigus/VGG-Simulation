@@ -6,7 +6,8 @@ c: pre-build
 	gcc -o obj/vgg.o -c src/vgg.c 
 	gcc -o obj/network.o -c src/network.c 
 	gcc -o obj/layer.o -c src/layer.c 
-	gcc -o bin/vgg obj/vgg.o obj/network.o obj/layer.o
+	gcc -o obj/ndarray.o -c src/ndarray.c 
+	gcc -o bin/vgg obj/vgg.o obj/network.o obj/layer.o obj/ndarray.o
 	./bin/vgg
 
 python: 

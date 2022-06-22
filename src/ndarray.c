@@ -38,11 +38,12 @@ ndarray* ndarray_create(int count, int* shape) {
 void ndarray_free(ndarray* nd) {
 	void *ptr = nd->arr; 
 	for (int i = 0; i < nd->dim; i++) {
-		void *next = *((void**)ptr); 
+		void *next = *((void**)ptr);
 		free(ptr); 
 		ptr = next; 
 	}
-	free(nd); 
+	free(nd->cumulative); 
+	free(nd);
 }
 
 ND_TYPE ndarray_val_list(ndarray* nd, int* pos) {
@@ -85,5 +86,4 @@ void ndarray_deep_display(ndarray* nd) {
 			pos[index]++; 
 		}
 	}
-	free(pos); 
 }
