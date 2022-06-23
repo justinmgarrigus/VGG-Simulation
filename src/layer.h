@@ -19,13 +19,13 @@ enum layer_activation {
 	layer_activation_softmax = 2
 };
 
-typedef struct layer {
+struct layer {
 	int weight_set_count;
 	ndarray **weights;
 	void (*feed)(layer* input, layer* op);
 	float (*activation)(float value);
 	ndarray *outputs;
-} layer; 
+}; 
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs); 
 void layer_free(layer* layer); 

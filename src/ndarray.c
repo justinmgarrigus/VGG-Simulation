@@ -85,22 +85,31 @@ void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...) {
 }
 
 void ndarray_deep_display(ndarray* nd) {
-	int *pos = malloc(sizeof(int) * nd->dim); 
-	while (pos[0] < nd->shape[0]) {
+	int *pos = malloc(sizeof(int) * nd->dim);
+	for (int i = 0; i < nd->dim; i++) 
+		pos[i] = 0;
+	
+	do {
 		printf("nd"); 
 		for (int i = 0; i < nd->dim; i++) { 
 			printf("[%d]", pos[i]);
 		}			
 		printf(" = "); 
 		printf(ND_DISPLAY, ndarray_get_val_list(nd, pos)); 
-		printf("\n"); 
-		
-		int index = nd->dim - 1; 
-		pos[index]++; 
-		while (pos[index] == nd->shape[index] && index > 0) {
-			pos[index] = 0; 
-			index--; 
-			pos[index]++; 
-		}
+		printf("\n");
 	}
+	while (ndarray_decimal_count(nd->dim, pos, nd->shape)); 
+	free(pos); 
+}
+
+int ndarray_decimal_count(int length, int* counter, int* shape) {
+	int i = length-1;
+	counter[i]++; 
+	while (counter[i] == shape[i]) {
+		counter[i] = 0; 
+		i--; 
+		if (i < 0) return 0; 
+		counter[i]++; 
+	}
+	return 1; 
 }

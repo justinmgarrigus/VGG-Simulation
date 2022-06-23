@@ -25,18 +25,6 @@ float file_read_float(FILE* file) {
 	return result; 
 }
 
-int decimal_count(int length, int* counter, int* shape) {
-	int i = length-1;
-	counter[i]++; 
-	while (counter[i] == shape[i]) {
-		counter[i] = 0; 
-		i--; 
-		if (i < 0) return 0; 
-		counter[i]++; 
-	}
-	return 1; 
-}
-
 network* network_create(char* data_file, char* label_file) {
 	FILE *file = fopen(data_file, "rb");
 	if (file == NULL) {
@@ -78,7 +66,7 @@ network* network_create(char* data_file, char* label_file) {
 			do {
 				ndarray_set_val_list(weights, counter, file_read_float(file)); 
 			}
-			while (decimal_count(dimensions, counter, shape)); 
+			while (ndarray_decimal_count(dimensions, counter, shape)); 
 			free(counter); 
 			
 			weight_set[set_index] = weights; 
@@ -104,7 +92,7 @@ void network_feedforward(network* network, ndarray* inputs) {
 	do {
 		ndarray_set_val_list(network->layers[0]->outputs, counter, ndarray_get_val_list(inputs, counter)); 
 	}
-	while (decimal_count(inputs->dim, counter, inputs->shape)); 
+	while (ndarray_decimal_count(inputs->dim, counter, inputs->shape)); 
 	free(counter); 
 	
 	// Feed the values forward. 
