@@ -3,10 +3,10 @@
 #include <string.h> 
 #include "layer.h" 
 
-void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) { }
-void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { }
-void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { }
-void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { }
+void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) { printf("Conv\n"); }
+void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { printf("Max\n"); }
+void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { printf("Flatten\n"); }
+void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { printf("Dense\n"); }
 
 float layer_relu(float value) { return 0.0f; }
 float layer_softmax(float value) { return 0.0f; }

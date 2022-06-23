@@ -96,6 +96,22 @@ network* network_create(char* data_file, char* label_file) {
 	return net; 
 }
 
+void network_feedforward(network* network, ndarray* inputs) {
+	// First layer is the input layer.
+	int *counter = malloc(sizeof(int) * inputs->dim); 
+	for (int c = 0; c < inputs->dim; c++) 
+		counter[c] = 0; 
+	do {
+		ndarray_set_val_list(network->layers[0]->outputs, counter, ndarray_get_val_list(inputs, counter)); 
+	}
+	while (decimal_count(inputs->dim, counter, inputs->shape)); 
+	free(counter); 
+	
+	// Feed the values forward. 
+	for (int i = 1; i < network->layer_count; i++) 
+		network->layers[i]->feed(network->layers[i-1], network->layers[i]); 
+}
+
 void network_free(network* network) {
 	for (int i = 0; i < network->layer_count; i++) 
 		layer_free(network->layers[i]);
