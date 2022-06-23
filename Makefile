@@ -34,7 +34,8 @@ c: pre-build
 	gcc -o obj/c/network.o -c src/c/network.c 
 	gcc -o obj/c/layer.o -c src/c/layer.c 
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c 
-	gcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o
+	gcc -o obj/c/image.o -c src/c/image.c
+	gcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o
 	./bin/vgg
 
 python: 

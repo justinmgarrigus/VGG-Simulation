@@ -4,3 +4,4 @@
 [submodule "lib/libjpeg"]
 	path = lib/libjpeg
 	url = https://github.com/LuaDist/libjpeg.git
+	ignore = dirty
