@@ -27,7 +27,7 @@ libjpeg:
 	./configure ; \
 	$(MAKE) ; \
 	$(MAKE) test ; \
-	$(MAKE) install			
+	sudo make install			
 
 c: pre-build
 	gcc -o obj/c/vgg.o -c src/c/vgg.c 
