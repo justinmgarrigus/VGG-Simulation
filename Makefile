@@ -1,4 +1,17 @@
-pre-build: nn-check 
+pre-build:
+ifeq ("$(wildcard lib/json-parser/)", "") 
+	git submodule init
+	git submodule update
+endif
+
+ifeq ("$(wildcard data/network.nn)", "") 
+	$(MAKE) nn
+endif 
+	
+ifneq ("$(wildcard lib/libjpeg/djpeg)", "")
+	$(MAKE) libjpeg
+endif
+
 	mkdir -p obj 
 	mkdir -p obj/c 
 	mkdir -p obj/python 
@@ -7,10 +20,12 @@ pre-build: nn-check
 nn: 
 	python3 src/python/network_operations.py -save data/network.nn
 
-nn-check: 
-ifeq ("$(wildcard data/network.nn)", "") 
-	$(MAKE) nn
-endif 
+libjpeg: 
+	cd lib/libjpeg ; \
+	./configure ; \
+	$(MAKE) ; \
+	$(MAKE) test ; \
+	$(MAKE) install			
 
 c: pre-build
 	gcc -o obj/c/vgg.o -c src/c/vgg.c 
