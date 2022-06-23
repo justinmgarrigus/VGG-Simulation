@@ -36,4 +36,3 @@ clean:
 	rm -f bin/*
 	rm -rf obj
 	rm -rf bin 
-	
