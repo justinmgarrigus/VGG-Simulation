@@ -33,7 +33,7 @@ void load_network() {
     int* weights_shape_ptr;
     int *shape_value_ptr;
     float *data_ptr;
-	FILE *file = fopen("/Users/bora/Desktop/VGG-Simulation/data/network.nn", "rb");
+	FILE *file = fopen("data/network.nn", "rb");
 	if (file == NULL) {
 		fprintf(stderr, "Error opening file!\n");
 	}
@@ -100,9 +100,8 @@ void load_network() {
     fclose(file);
 }
 
-/*
+
 int main() {
 
     load_network();
 }
-*/

@@ -11,29 +11,16 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { }
 float layer_relu(float value) { return 0.0f; }
 float layer_softmax(float value) { return 0.0f; }
 
-layer* layer_create(int weight_set_count, int* weight_set_shape_count, int** weight_set_shapes, enum layer_type type, enum layer_activation activation) {
+layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation) {
 	layer *lr = malloc(sizeof(layer));
 	
 	lr->weight_set_count = weight_set_count; 
-	lr->weights = malloc(sizeof(ndarray*) * weight_set_count);
-	for (int i = 0; i < weight_set_count; i++) 
-		lr->weights[i] = ndarray_create(weight_set_shape_count[i], weight_set_shapes[i]);
-	
-	switch (activation) {
-		case layer_activation_relu: 
-			lr->activation = layer_relu; 
-			break; 
-			
-		case layer_activation_softmax: 
-			lr->activation = layer_softmax; 
-			break; 
-			
-		default: 
-			fprintf(stderr, "Unknown activation type specified: %d\n", activation); 
-			exit(-1); 
-	}
+	lr->weights = weights; 
 	
 	switch (type) {
+		case layer_type_none: 
+			break; 
+		
 		case layer_type_convolutional: 
 			lr->feed = layer_convolutional_feedforward; 
 			break; 
@@ -52,6 +39,23 @@ layer* layer_create(int weight_set_count, int* weight_set_shape_count, int** wei
 			
 		default: 
 			fprintf(stderr, "Unknown layer type specified: %d\n", type); 
+			exit(-1); 
+	}
+	
+	switch (activation) {
+		case layer_activation_none: 
+			break; 
+		
+		case layer_activation_relu: 
+			lr->activation = layer_relu; 
+			break; 
+			
+		case layer_activation_softmax: 
+			lr->activation = layer_softmax; 
+			break; 
+			
+		default: 
+			fprintf(stderr, "Unknown activation type specified: %d\n", activation); 
 			exit(-1); 
 	}
 	

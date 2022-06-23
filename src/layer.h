@@ -6,6 +6,7 @@
 typedef struct layer layer; 
 
 enum layer_type {
+	layer_type_none = 0, 
 	layer_type_convolutional = 1, 
 	layer_type_max_pooling = 2, 
 	layer_type_flatten = 3, 
@@ -13,6 +14,7 @@ enum layer_type {
 }; 
 
 enum layer_activation {
+	layer_activation_none = 0,
 	layer_activation_relu = 1, 
 	layer_activation_softmax = 2
 };
@@ -25,7 +27,7 @@ typedef struct layer {
 	ndarray *outputs;
 } layer; 
 
-layer* layer_create(int weight_set_count, int* weight_set_shape_count, int** weight_set_shapes, enum layer_type type, enum layer_activation activation); 
+layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation); 
 void layer_free(layer* layer); 
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer);

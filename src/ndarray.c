@@ -46,14 +46,14 @@ void ndarray_free(ndarray* nd) {
 	free(nd);
 }
 
-ND_TYPE ndarray_val_list(ndarray* nd, int* pos) {
+ND_TYPE ndarray_get_val_list(ndarray* nd, int* pos) {
 	void *result = nd->arr; 
 	for (int i = 0; i < nd->dim - 1; i++)
 		result = *((void**)result + pos[i]);
 	return *((ND_TYPE*)result + pos[nd->dim-1]); 
 }
 
-ND_TYPE ndarray_val_param(ndarray* nd, ...) {
+ND_TYPE ndarray_get_val_param(ndarray* nd, ...) {
 	va_list valist; 
 	va_start(valist, nd); 
 	
@@ -62,7 +62,26 @@ ND_TYPE ndarray_val_param(ndarray* nd, ...) {
 		pos[i] = va_arg(valist, int); 
 	
 	va_end(valist); 
-	return ndarray_val_list(nd, pos);
+	return ndarray_get_val_list(nd, pos);
+}
+
+void ndarray_set_val_list(ndarray* nd, int* pos, ND_TYPE value) {
+	void *result = nd->arr; 
+	for (int i = 0; i < nd->dim - 1; i++) 
+		result = *((void**)result + pos[i]); 
+	*((ND_TYPE*)result + pos[nd->dim-1]) = value; 
+}
+
+void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...) {
+	va_list valist; 
+	va_start(valist, value); 
+	
+	int pos[nd->dim]; 
+	for (int i = 0; i < nd->dim; i++) 
+		pos[i] = va_arg(valist, int); 
+	
+	va_end(valist); 
+	ndarray_set_val_list(nd, pos, value);
 }
 
 void ndarray_deep_display(ndarray* nd) {
@@ -70,12 +89,10 @@ void ndarray_deep_display(ndarray* nd) {
 	while (pos[0] < nd->shape[0]) {
 		printf("nd"); 
 		for (int i = 0; i < nd->dim; i++) { 
-			printf("[");  
-			printf(ND_DISPLAY, pos[i]); 
-			printf("]");
+			printf("[%d]", pos[i]);
 		}			
 		printf(" = "); 
-		printf(ND_DISPLAY, ndarray_val_list(nd, pos)); 
+		printf(ND_DISPLAY, ndarray_get_val_list(nd, pos)); 
 		printf("\n"); 
 		
 		int index = nd->dim - 1; 
