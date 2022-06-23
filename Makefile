@@ -1,5 +1,5 @@
 pre-build:
-ifeq ("$(wildcard lib/json-parser/)", "") 
+ifeq ("$(wildcard lib/json-parser/*)", "") 
 	git submodule init
 	git submodule update
 endif
@@ -8,14 +8,16 @@ ifeq ("$(wildcard data/network.nn)", "")
 	$(MAKE) nn
 endif 
 	
-ifneq ("$(wildcard lib/libjpeg/djpeg)", "")
+ifeq ("$(wildcard lib/libjpeg/djpeg)", "")
 	$(MAKE) libjpeg
 endif
 
+ifeq ("$(wildcard obj/*)", "") 
 	mkdir -p obj 
 	mkdir -p obj/c 
 	mkdir -p obj/python 
 	mkdir -p bin 
+endif
 	
 nn: 
 	python3 src/python/network_operations.py -save data/network.nn
