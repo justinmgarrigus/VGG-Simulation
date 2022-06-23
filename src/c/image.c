@@ -102,13 +102,26 @@ void image_free(image* img) {
 }
 
 struct image_iterator* image_create_iter(image* img, int width, int height) {
-	
+	struct image_iterator *iter = malloc(sizeof(struct image_iterator)); 
+	iter->x = 0; 
+	iter->y = 0; 
+	iter->width_max = width; 
+	iter->height_max = height; 
+	iter->width_stride = img->width / width; 
+	iter->height_stride = img->height / height;
+	return iter; 
 }
 
 int image_iter_color(image* img, struct image_iterator* iter) {
-	
+	int color = img->colors[(int)(iter->y * iter->height_stride * iter->width_max + iter->x * iter->width_stride)]; 
+	iter->x++; 
+	if (iter->x == iter->width_max) {
+		iter->x = 0; 
+		iter->y++;
+		return color; 
+	}
 }
 
 int image_pos_color(image* img, int x, int y) {
-	
+	return img->colors[y * img->width + x];
 }

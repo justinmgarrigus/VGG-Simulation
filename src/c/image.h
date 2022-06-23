@@ -8,8 +8,8 @@ typedef struct image {
 
 struct image_iterator {
 	int x, y; 
-	int width_stride, height_stride; 
 	int width_max, height_max;
+	float width_stride, height_stride; 
 };
 
 image* image_load(char* file_name); 

@@ -19,5 +19,6 @@ void ndarray_set_val_list(ndarray* nd, int* pos, ND_TYPE value);
 void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...); 
 void ndarray_deep_display(ndarray* nd); 
 int ndarray_decimal_count(int length, int* counter, int* shape);
+void ndarray_fprint(ndarray* arr, FILE* file); 
 
 #endif 

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h> 
 #include <stdarg.h> 
+#include <string.h> 
 #include "ndarray.h" 
 
 ndarray* ndarray_create(int count, int* shape) {
@@ -28,7 +29,8 @@ ndarray* ndarray_create(int count, int* shape) {
 	
 	ndarray *nd = malloc(sizeof(ndarray)); 
 	nd->dim = count; 
-	nd->shape = shape; 
+	nd->shape = malloc(sizeof(int) * count); 
+	memcpy(nd->shape, shape, sizeof(int) * count); 
 	nd->cumulative = cumulative; 
 	nd->arr = result; 
 	
@@ -42,6 +44,7 @@ void ndarray_free(ndarray* nd) {
 		free(ptr); 
 		ptr = next; 
 	}
+	free(nd->shape);
 	free(nd->cumulative); 
 	free(nd);
 }
@@ -112,4 +115,11 @@ int ndarray_decimal_count(int length, int* counter, int* shape) {
 		counter[i]++; 
 	}
 	return 1; 
+}
+
+void ndarray_fprint(ndarray* arr, FILE* file) {
+	fprintf(file, "[");
+	for (int i = 0; i < arr->dim-1; i++) 
+		fprintf(file, "%d, ", arr->shape[i]);
+	fprintf(file, "%d]", arr->shape[arr->dim-1]); 
 }
