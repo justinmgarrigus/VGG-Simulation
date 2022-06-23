@@ -85,7 +85,7 @@ network* network_create(char* data_file, char* label_file) {
 }
 
 void network_feedforward(network* network, ndarray* inputs) {
-	// First layer is the input layer.
+	// First layer is the input layer; copy inputs over. 
 	int *counter = malloc(sizeof(int) * inputs->dim); 
 	for (int c = 0; c < inputs->dim; c++) 
 		counter[c] = 0; 
