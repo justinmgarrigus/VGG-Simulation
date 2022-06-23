@@ -56,6 +56,13 @@ def save_network(model, network_file_name):
 				flattened_weights_value = flattened_weights[i]
 				ba = bytearray(struct.pack("f", flattened_weights_value))
 				file.write(ba)
+		print(layer.output_shape) 
+		output_shape = layer.output_shape if type(layer.output_shape) is tuple else layer.output_shape[0]
+		output_shape = list(output_shape)
+		output_shape[0] = 1 # replace None value 
+		file.write(len(output_shape).to_bytes(4, byteorder='big', signed=True))
+		for dim in output_shape:
+			file.write(int(dim).to_bytes(4, byteorder='big', signed=True)) 
 	file.close()
 	print("Network saved to", network_file_name) 
 	

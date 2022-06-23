@@ -84,7 +84,13 @@ network* network_create(char* data_file, char* label_file) {
 			weight_set[set_index] = weights; 
 		}
 		
-		net->layers[i] = layer_create(weight_set_count, weight_set, layer_type, activation_type); 
+		int output_length = file_read_int(file); 
+		int *output_shape = malloc(sizeof(int) * output_length);
+		for (int output_index = 0; output_index < output_length; output_index++)
+			output_shape[output_index] = file_read_int(file);
+		ndarray *outputs = ndarray_create(output_length, output_shape); 
+		
+		net->layers[i] = layer_create(weight_set_count, weight_set, layer_type, activation_type, outputs); 
 	}
 	
 	return net; 

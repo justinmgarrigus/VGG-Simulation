@@ -1,13 +1,16 @@
-pre-build: nn 
+pre-build: nn-check 
 	mkdir -p obj 
 	mkdir -p bin 
 	
 nn: 
-ifeq ("$(wildcard data/network.nn)", "") 
 	python3 src/network_operations.py -save network.nn
+
+nn-check: 
+ifeq ("$(wildcard data/network.nn)", "") 
+	$(MAKE) nn
 endif 
 
-c: pre-build nn
+c: pre-build
 	gcc -o obj/vgg.o -c src/vgg.c 
 	gcc -o obj/network.o -c src/network.c 
 	gcc -o obj/layer.o -c src/layer.c 

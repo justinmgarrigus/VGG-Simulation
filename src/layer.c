@@ -11,11 +11,12 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { }
 float layer_relu(float value) { return 0.0f; }
 float layer_softmax(float value) { return 0.0f; }
 
-layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation) {
+layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
 	layer *lr = malloc(sizeof(layer));
 	
 	lr->weight_set_count = weight_set_count; 
 	lr->weights = weights; 
+	lr->outputs = outputs; 
 	
 	switch (type) {
 		case layer_type_none: 
@@ -66,6 +67,6 @@ void layer_free(layer* layer) {
 	for (int i = 0; i < layer->weight_set_count; i++)
 		ndarray_free(layer->weights[i]);
 	free(layer->weights);
-	//ndarray_free(layer->outputs); // TODO
+	ndarray_free(layer->outputs);
 	free(layer);
 }

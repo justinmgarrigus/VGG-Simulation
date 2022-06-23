@@ -27,7 +27,7 @@ typedef struct layer {
 	ndarray *outputs;
 } layer; 
 
-layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation); 
+layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs); 
 void layer_free(layer* layer); 
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer);
