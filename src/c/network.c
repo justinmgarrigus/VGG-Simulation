@@ -96,16 +96,9 @@ void network_feedforward(network* network, ndarray* inputs) {
 	free(counter); 
 	
 	// Feed the values forward. 
-	int file_counter = 0; 
-	char buffer[100]; 
 	for (int i = 1; i < network->layer_count; i++) {
-		sprintf(buffer, "logs/c_log_%d.txt", file_counter++); 
-		ndarray_log(network->layers[i-1]->outputs, buffer); 
 		network->layers[i]->feed(network->layers[i-1], network->layers[i]); 
 	}
-	
-	sprintf(buffer, "logs/c_log_%d.txt", file_counter); 
-	ndarray_log(network->layers[network->layer_count-1]->outputs, buffer); 
 }
 
 void network_free(network* network) {
