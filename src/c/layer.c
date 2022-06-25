@@ -5,8 +5,6 @@
 #include "layer.h" 
 #include "progress.h" 
 
-#define DRAW_PROGRESS 
-
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
 	layer *lr = malloc(sizeof(layer));
 	
@@ -68,7 +66,7 @@ void layer_free(layer* layer) {
 }
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
-	printf("Conv2D "); ndarray_fprint(input_layer->outputs, stdout); printf(" "); 
+	printf("Conv2D "); ndarray_fprint(input_layer->outputs, stdout);
 	int padding[4] = {0, 1, 1, 0};
 	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
 	
@@ -77,7 +75,11 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	ndarray *bias = conv_layer->weights[1];
 	
 #ifdef DRAW_PROGRESS
+	printf("\033[s"); // Save cursor position 
+	printf("\n"); 
 	struct progressbar *bar = progressbar_create(10, 3, 2);
+#else 
+	printf("\n"); 
 #endif
 	
 	int counter = 0; 
@@ -106,20 +108,29 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	}	
 
 #ifdef DRAW_PROGRESS
-	progressbar_draw(bar, 1); 
+	printf("\033[u"); // Restore cursor position
+	printf("\033[1A"); // Go up one line
+	printf(" \x1B[36m"); // Color cyan 
+	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
+	printf(bar->digit_format, elapsed_time); 
+	network_operation_time += elapsed_time; 
+	printf(" \x1B[35m(%.2f)", network_operation_time); // Color magenta, total time
+	printf("\x1B[0m\n"); // Reset color and newline 
 	progressbar_free(bar); 
-#endif 
-
-	printf("\n");
+#endif
 }
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
-	printf("MaxPooling "); ndarray_fprint(pool_layer->outputs, stdout); printf(" "); 
+	printf("MaxPooling "); ndarray_fprint(pool_layer->outputs, stdout);
 	ndarray *input = input_layer->outputs; 
 	ndarray *output = pool_layer->outputs;
 
 #ifdef DRAW_PROGRESS	
+	printf("\033[s"); // Save cursor position 
+	printf("\n"); 
 	struct progressbar *bar = progressbar_create(10, 3, 2);
+#else 
+	printf("\n"); 
 #endif 
 	
 	for (int offset_x = 0; offset_x < input->shape[1]; offset_x += 2) {
@@ -143,11 +154,16 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 	}
 	
 #ifdef DRAW_PROGRESS
-	progressbar_draw(bar, 1); 
-	progressbar_free(bar); 
-#endif 
-	
-	printf("\n"); 
+	printf("\033[u"); // Restore cursor position
+	printf("\033[1A"); // Go up one line
+	printf(" \x1B[36m"); // Color cyan 
+	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
+	printf(bar->digit_format, elapsed_time); 
+	network_operation_time += elapsed_time; 
+	printf(" \x1B[35m(%.2f)", network_operation_time); // Color magenta, total time
+	printf("\x1B[0m\n"); // Reset color and newline 
+	progressbar_free(bar);  
+#endif
 }
 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
@@ -156,8 +172,12 @@ void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) {
 	ndarray *output = flatten_layer->outputs; 
 	
 #ifdef DRAW_PROGRESS
+	printf("\033[s"); // Save cursor position 
+	printf("\n"); 
 	struct progressbar *bar = progressbar_create(10, 3, 2);
-#endif 
+#else 
+	printf("\n"); 
+#endif
 	
 	int *pos = malloc(sizeof(int) * input->dim);
 	for (int i = 0; i < input->dim; i++)
@@ -171,22 +191,31 @@ void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) {
 	free(pos); 
 	
 #ifdef DRAW_PROGRESS
-	progressbar_draw(bar, 1); 
+	printf("\033[u"); // Restore cursor position
+	printf("\033[1A"); // Go up one line
+	printf(" \x1B[36m"); // Color cyan 
+	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
+	printf(bar->digit_format, elapsed_time); 
+	network_operation_time += elapsed_time; 
+	printf(" \x1B[35m(%.2f)", network_operation_time); // Color magenta, total time
+	printf("\x1B[0m\n"); // Reset color and newline 
 	progressbar_free(bar); 
-#endif 
-
-	printf("\n"); 
+#endif
 }
 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { 
-	printf("Dense "); ndarray_fprint(dense_layer->outputs, stdout); printf(" "); 
+	printf("Dense "); ndarray_fprint(dense_layer->outputs, stdout);
 	ndarray *input = input_layer->outputs; 
 	ndarray *output = dense_layer->outputs; 
 	ndarray *weights = dense_layer->weights[0]; 
 	ndarray *biases = dense_layer->weights[1];
 
 #ifdef DRAW_PROGRESS
+	printf("\033[s"); // Save cursor position 
+	printf("\n"); 
 	struct progressbar *bar = progressbar_create(10, 3, 2);
+#else 
+	printf("\n"); 
 #endif 
 
 	ND_TYPE expo_sum = 0; 
@@ -217,10 +246,16 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 	}
 	
 #ifdef DRAW_PROGRESS
-	progressbar_draw(bar, 1); 
+	printf("\033[u"); // Restore cursor position
+	printf("\033[1A"); // Go up one line
+	printf(" \x1B[36m"); // Color cyan 
+	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
+	printf(bar->digit_format, elapsed_time); 
+	network_operation_time += elapsed_time; 
+	printf(" \x1B[35m(%.2f)", network_operation_time); // Color magenta, total time
+	printf("\x1B[0m\n"); // Reset color and newline 
 	progressbar_free(bar); 
 #endif 
-	printf("\n"); 
 }
 
 ND_TYPE layer_relu(ND_TYPE* value) { 

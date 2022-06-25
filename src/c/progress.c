@@ -32,8 +32,7 @@ void progressbar_free(struct progressbar* bar) {
 }
 
 void progressbar_draw(struct progressbar* bar, double percentage) {
-	for (int i = 0; i < bar->width + bar->digits + 1; i++)
-		printf("\b"); 
+	progressbar_clear(bar); 
 	printf("["); 
 	
 	int drawn = (bar->width - 2) * percentage;
@@ -44,6 +43,11 @@ void progressbar_draw(struct progressbar* bar, double percentage) {
 	printf("] "); 
 	printf(bar->digit_format, (current_time_millis() - bar->time_started) / 1000.0);
 	fflush(stdout); 
+}
+
+void progressbar_clear(struct progressbar* bar) {
+	for (int i = 0; i < bar->width + bar->digits + 1; i++)
+		printf("\b"); 
 }
 
 time_t current_time_millis() {

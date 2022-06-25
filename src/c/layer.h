@@ -38,4 +38,8 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer);
 ND_TYPE layer_relu(ND_TYPE* value); 
 ND_TYPE layer_softmax(ND_TYPE* value); 
 
+#ifdef DRAW_PROGRESS 
+double network_operation_time; 
+#endif
+
 #endif 

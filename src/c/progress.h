@@ -13,6 +13,7 @@ struct progressbar {
 struct progressbar* progressbar_create(int width, int whole_digits, int precision);
 void progressbar_free(struct progressbar* bar); 
 void progressbar_draw(struct progressbar* bar,  double percentage); 
+void progressbar_clear(struct progressbar* bar); 
 
 time_t current_time_millis(); 
 

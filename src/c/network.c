@@ -5,7 +5,7 @@
 #include "network.h"
 #include "layer.h" 
 #include "ndarray.h"
-#include "json.h"  
+#include "json.h" 
 
 int random_float_01() {
 	return (float)rand() / (float)RAND_MAX;
@@ -138,6 +138,10 @@ network* network_create(char* data_file, char* label_file) {
 }
 
 void network_feedforward(network* network, ndarray* inputs) {
+#ifdef DRAW_PROGRESS
+	network_operation_time = 0; 
+#endif 
+	
 	// First layer is the input layer; copy inputs over. 
 	int *counter = malloc(sizeof(int) * inputs->dim); 
 	for (int c = 0; c < inputs->dim; c++) 
