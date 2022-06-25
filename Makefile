@@ -36,7 +36,8 @@ c: pre-build
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c 
 	gcc -o obj/c/image.o -c src/c/image.c
 	gcc -o obj/c/json.o -c lib/json-parser/json.c 
-	gcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o obj/c/json.o -lm
+	gcc -o obj/c/progress.o -c src/c/progress.c
+	gcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o obj/c/json.o obj/c/progress.o -lm
 	./bin/vgg
 
 python: 

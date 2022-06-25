@@ -3,6 +3,9 @@
 #include <string.h> 
 #include <math.h> 
 #include "layer.h" 
+#include "progress.h" 
+
+#define DRAW_PROGRESS 
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
 	layer *lr = malloc(sizeof(layer));
@@ -65,13 +68,20 @@ void layer_free(layer* layer) {
 }
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
-	printf("Conv2D "); ndarray_fprint(conv_layer->outputs, stdout); printf("\n"); 
+	printf("Conv2D "); ndarray_fprint(input_layer->outputs, stdout); printf(" "); 
 	int padding[4] = {0, 1, 1, 0};
 	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
 	
 	ndarray *outputs = conv_layer->outputs; 
 	ndarray *kernel = conv_layer->weights[0]; 
 	ndarray *bias = conv_layer->weights[1];
+	
+#ifdef DRAW_PROGRESS
+	struct progressbar *bar = progressbar_create(10, 3, 2);
+#endif
+	
+	int counter = 0; 
+	int counter_max = outputs->shape[1] * outputs->shape[2]; 
 	for (int x = 0; x < outputs->shape[1]; x++) {
 		for (int y = 0; y < outputs->shape[2]; y++) {
 			for (int filter_index = 0; filter_index < outputs->shape[3]; filter_index++) {
@@ -88,14 +98,30 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 				if (result < 0) result = 0;
 				ndarray_set_val_param(outputs, result, 0, x, y, filter_index); 
 			}
+			
+#ifdef DRAW_PROGRESS
+			progressbar_draw(bar, (double)(counter++) / counter_max); 
+#endif 
 		}
 	}	
+
+#ifdef DRAW_PROGRESS
+	progressbar_draw(bar, 1); 
+	progressbar_free(bar); 
+#endif 
+
+	printf("\n");
 }
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
-	printf("MaxPooling "); ndarray_fprint(pool_layer->outputs, stdout); printf("\n"); 
+	printf("MaxPooling "); ndarray_fprint(pool_layer->outputs, stdout); printf(" "); 
 	ndarray *input = input_layer->outputs; 
-	ndarray *output = pool_layer->outputs; 
+	ndarray *output = pool_layer->outputs;
+
+#ifdef DRAW_PROGRESS	
+	struct progressbar *bar = progressbar_create(10, 3, 2);
+#endif 
+	
 	for (int offset_x = 0; offset_x < input->shape[1]; offset_x += 2) {
 		for (int offset_y = 0; offset_y < input->shape[2]; offset_y += 2) {
 			for (int z = 0; z < input->shape[3]; z++) {
@@ -110,32 +136,58 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 				ndarray_set_val_param(output, max_value, 0, offset_x / 2, offset_y / 2, z); 
 			}
 		}
+		
+#ifdef DRAW_PROGRESS
+		progressbar_draw(bar, (double)offset_x / input->shape[1]); 
+#endif 
 	}
+	
+#ifdef DRAW_PROGRESS
+	progressbar_draw(bar, 1); 
+	progressbar_free(bar); 
+#endif 
+	
+	printf("\n"); 
 }
 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
-	printf("Flatten "); ndarray_fprint(flatten_layer->outputs, stdout); printf("\n"); 
+	printf("Flatten "); ndarray_fprint(flatten_layer->outputs, stdout); printf(" "); 
 	ndarray *input = input_layer->outputs; 
 	ndarray *output = flatten_layer->outputs; 
 	
+#ifdef DRAW_PROGRESS
+	struct progressbar *bar = progressbar_create(10, 3, 2);
+#endif 
+	
 	int *pos = malloc(sizeof(int) * input->dim);
-	for (int i = 0; i < input->dim; i++) 
+	for (int i = 0; i < input->dim; i++)
 		pos[i] = 0;
 	
 	int index = 0; 
 	do {
-		ndarray_set_val_param(output, ndarray_get_val_list(input, pos), 0, index++);  
+		ndarray_set_val_param(output, ndarray_get_val_list(input, pos), 0, index++);
 	}
 	while (ndarray_decimal_count(input->dim, pos, input->shape));
 	free(pos); 
+	
+#ifdef DRAW_PROGRESS
+	progressbar_draw(bar, 1); 
+	progressbar_free(bar); 
+#endif 
+
+	printf("\n"); 
 }
 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { 
-	printf("Dense "); ndarray_fprint(dense_layer->outputs, stdout); printf("\n"); 
+	printf("Dense "); ndarray_fprint(dense_layer->outputs, stdout); printf(" "); 
 	ndarray *input = input_layer->outputs; 
 	ndarray *output = dense_layer->outputs; 
 	ndarray *weights = dense_layer->weights[0]; 
 	ndarray *biases = dense_layer->weights[1];
+
+#ifdef DRAW_PROGRESS
+	struct progressbar *bar = progressbar_create(10, 3, 2);
+#endif 
 
 	ND_TYPE expo_sum = 0; 
 	for (int i = 0; i < input->shape[0]; i++) {
@@ -145,6 +197,10 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 				result += ndarray_get_val_param(input, i, k) * ndarray_get_val_param(weights, k, j); 
 			ndarray_set_val_param(output, result, i, j);
 			expo_sum += exp(result);
+			
+#ifdef DRAW_PROGRESS
+			progressbar_draw(bar, (double)j / weights->shape[1] * 0.8); // TODO: This assumes input->shape[0] == 1
+#endif 			
 		}
 	}
 	
@@ -153,8 +209,18 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 		for (int j = 0; j < weights->shape[1]; j++) {
 			acti[0] = ndarray_get_val_param(output, i, j); 
 			ndarray_set_val_param(output, dense_layer->activation(acti), i, j); 
+			
+#ifdef DRAW_PROGRESS
+			progressbar_draw(bar, (double)j / weights->shape[1] * 0.2 + 0.8); // TODO: same as above
+#endif 
 		}
 	}
+	
+#ifdef DRAW_PROGRESS
+	progressbar_draw(bar, 1); 
+	progressbar_free(bar); 
+#endif 
+	printf("\n"); 
 }
 
 ND_TYPE layer_relu(ND_TYPE* value) { 
