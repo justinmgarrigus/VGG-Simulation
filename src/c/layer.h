@@ -23,7 +23,7 @@ struct layer {
 	int weight_set_count;
 	ndarray **weights;
 	void (*feed)(layer* input, layer* op);
-	float (*activation)(float value);
+	ND_TYPE (*activation)(ND_TYPE* value);
 	ndarray *outputs;
 }; 
 
@@ -35,7 +35,7 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer);
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer); 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer); 
 
-float layer_relu(float value); 
-float layer_softmax(float value); 
+ND_TYPE layer_relu(ND_TYPE* value); 
+ND_TYPE layer_softmax(ND_TYPE* value); 
 
 #endif 

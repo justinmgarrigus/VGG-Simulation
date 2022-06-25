@@ -11,8 +11,6 @@ ndarray* ndarray_create(int count, int* shape) {
 		cumulative[i] = cumulative[i-1] * shape[i]; 
 	
 	ND_TYPE *arr = malloc(sizeof(ND_TYPE) * cumulative[count-1]);
-	for (int i = 0; i < cumulative[count-1]; i++) 
-		arr[i] = i;
 	int size = sizeof(ND_TYPE); 
 	
 	void *data = arr; 
@@ -35,6 +33,30 @@ ndarray* ndarray_create(int count, int* shape) {
 	nd->arr = result; 
 	
 	return nd; 
+}
+
+ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
+	int *new_shape = malloc(sizeof(int) * base->dim); 
+	for (int i = 0; i < base->dim; i++) 
+		new_shape[i] = base->shape[i] + 2 * shape_pad[i]; 
+	ndarray *new_arr = ndarray_create(base->dim, new_shape);
+	
+	int *pos = malloc(sizeof(int) * base->dim);
+	for (int i = 0; i < base->dim; i++) 
+		pos[i] = 0;
+	int *actual = malloc(sizeof(int) * base->dim); 
+	
+	do {
+		for (int i = 0; i < base->dim; i++) 
+			actual[i] = pos[i] + shape_pad[i];
+		ndarray_set_val_list(new_arr, actual, ndarray_get_val_list(base, pos));
+	}
+	while (ndarray_decimal_count(base->dim, pos, base->shape)); 
+	
+	free(new_shape); 
+	free(pos); 
+	free(actual); 
+	return new_arr; 
 }
 
 void ndarray_free(ndarray* nd) {
@@ -92,6 +114,7 @@ void ndarray_deep_display(ndarray* nd) {
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = 0;
 	
+	int num_printed = 0; 
 	do {
 		printf("nd"); 
 		for (int i = 0; i < nd->dim; i++) { 
@@ -101,8 +124,30 @@ void ndarray_deep_display(ndarray* nd) {
 		printf(ND_DISPLAY, ndarray_get_val_list(nd, pos)); 
 		printf("\n");
 	}
-	while (ndarray_decimal_count(nd->dim, pos, nd->shape)); 
+	while (ndarray_decimal_count(nd->dim, pos, nd->shape) && ++num_printed < 1500); 
 	free(pos); 
+}
+
+void ndarray_log(ndarray* nd, char* file_name) {
+	FILE *fp = fopen(file_name, "w"); 
+	if (fp == NULL) {
+		fprintf(stderr, "Cannot open file %s\n", file_name); 
+		exit(1);
+	}		
+	
+	for (int i = 0; i < nd->dim; i++) 
+		fprintf(fp, "%d ", nd->shape[i]);
+	fprintf(fp, "\n"); 
+	
+	int *pos = malloc(sizeof(int) * nd->dim);
+	for (int i = 0; i < nd->dim; i++) 
+		pos[i] = 0;
+	
+	do {
+		fprintf(fp, "%f ", ndarray_get_val_list(nd, pos)); 
+	}
+	while (ndarray_decimal_count(nd->dim, pos, nd->shape));
+	fclose(fp); 
 }
 
 int ndarray_decimal_count(int length, int* counter, int* shape) {

@@ -1,15 +1,8 @@
 #include <stdlib.h> 
 #include <stdio.h> 
 #include <string.h> 
+#include <math.h> 
 #include "layer.h" 
-
-void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) { printf("Conv\n"); }
-void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { printf("Max\n"); }
-void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { printf("Flatten\n"); }
-void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { printf("Dense\n"); }
-
-float layer_relu(float value) { return 0.0f; }
-float layer_softmax(float value) { return 0.0f; }
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
 	layer *lr = malloc(sizeof(layer));
@@ -69,4 +62,105 @@ void layer_free(layer* layer) {
 	free(layer->weights);
 	ndarray_free(layer->outputs);
 	free(layer);
+}
+
+void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
+	printf("Conv2D "); ndarray_fprint(conv_layer->outputs, stdout); printf("\n"); 
+	int padding[4] = {0, 1, 1, 0}; 
+	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
+	
+	ndarray *outputs = conv_layer->outputs; 
+	ndarray *kernel = conv_layer->weights[0]; 
+	ndarray *bias = conv_layer->weights[1];
+	for (int x = 0; x < outputs->shape[1]; x++) {
+		for (int y = 0; y < outputs->shape[2]; y++) {
+			for (int filter_index = 0; filter_index < outputs->shape[3]; filter_index++) {
+				ND_TYPE result = ndarray_get_val_param(bias, filter_index);  
+				for (int kernel_x = 0; kernel_x < kernel->shape[0]; kernel_x++) {
+					for (int kernel_y = 0; kernel_y < kernel->shape[1]; kernel_y++) {
+						for (int channel = 0; channel < inputs->shape[3]; channel++) {
+							result += ndarray_get_val_param(kernel, kernel_x, kernel_y, channel, filter_index) * ndarray_get_val_param(inputs, 0, x + kernel_x, y + kernel_y, channel);  
+						}
+					}
+				}
+				
+				result = conv_layer->activation(&result); 
+				if (result < 0) result = 0;
+				ndarray_set_val_param(outputs, result, 0, x, y, filter_index); 
+			}
+		}
+	}	
+}
+
+void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
+	printf("MaxPooling "); ndarray_fprint(pool_layer->outputs, stdout); printf("\n"); 
+	ndarray *input = input_layer->outputs; 
+	ndarray *output = pool_layer->outputs; 
+	for (int offset_x = 0; offset_x < input->shape[1]; offset_x += 2) {
+		for (int offset_y = 0; offset_y < input->shape[2]; offset_y += 2) {
+			for (int z = 0; z < input->shape[3]; z++) {
+				ND_TYPE max_value = 0; 
+				for (int kernel_x = 0; kernel_x < 2; kernel_x++) {
+					for (int kernel_y = 0; kernel_y < 2; kernel_y++) {
+						ND_TYPE val = ndarray_get_val_param(input, 0, offset_x + kernel_x, offset_y + kernel_y, z); 
+						if (val > max_value) 
+							max_value = val; 
+					}
+				}
+				ndarray_set_val_param(output, max_value, 0, offset_x / 2, offset_y / 2, z); 
+			}
+		}
+	}
+}
+
+void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
+	printf("Flatten "); ndarray_fprint(flatten_layer->outputs, stdout); printf("\n"); 
+	ndarray *input = input_layer->outputs; 
+	ndarray *output = flatten_layer->outputs; 
+	
+	int *pos = malloc(sizeof(int) * input->dim);
+	for (int i = 0; i < input->dim; i++) 
+		pos[i] = 0;
+	
+	int index = 0; 
+	do {
+		ndarray_set_val_param(output, ndarray_get_val_list(input, pos), 0, index++);  
+	}
+	while (ndarray_decimal_count(input->dim, pos, input->shape));
+	free(pos); 
+}
+
+void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { 
+	printf("Dense "); ndarray_fprint(dense_layer->outputs, stdout); printf("\n"); 
+	ndarray *input = input_layer->outputs; 
+	ndarray *output = dense_layer->outputs; 
+	ndarray *weights = dense_layer->weights[0]; 
+	ndarray *biases = dense_layer->weights[1];
+
+	ND_TYPE expo_sum = 0; 
+	for (int i = 0; i < input->shape[0]; i++) {
+		for (int j = 0; j < weights->shape[1]; j++) {
+			ND_TYPE result = ndarray_get_val_param(biases, j); 
+			for (int k = 0; k < weights->shape[0]; k++)
+				result += ndarray_get_val_param(input, i, k) * ndarray_get_val_param(weights, k, j); 
+			ndarray_set_val_param(output, result, i, j);
+			expo_sum += exp(result);
+		}
+	}
+	
+	ND_TYPE acti[2] = { 0, expo_sum }; 
+	for (int i = 0; i < input->shape[0]; i++) {
+		for (int j = 0; j < weights->shape[1]; j++) {
+			acti[0] = ndarray_get_val_param(output, i, j); 
+			ndarray_set_val_param(output, dense_layer->activation(acti), i, j); 
+		}
+	}
+}
+
+ND_TYPE layer_relu(ND_TYPE* value) { 
+	return *value > 0 ? *value : 0; 
+}
+
+ND_TYPE layer_softmax(ND_TYPE* value) {
+	return exp(value[0]) / value[1]; 
 }

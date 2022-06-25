@@ -4,9 +4,9 @@
 #include "image.h" 
 
 int main(int argc, char** argv) {
-	network *network = network_create("data/network.nn", "data.json");
-	
+	network *network = network_create("data/network.nn", "data/imagenet_class_index.json");
 	image *img = image_load("data/dog.jpg");
+	
 	int sum_red = 0; 
 	int sum_green = 0; 
 	int sum_blue = 0; 
@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 	}
 	int avg_red = sum_red / size; 
 	int avg_green = sum_green / size; 
-	int avg_blue = sum_blue / size; 
+	int avg_blue = sum_blue / size;
 	
 	int *length = malloc(sizeof(int) * 4); 
 	length[0] = 1; length[1] = 224; length[2] = 224; length[3] = 3; 
@@ -33,18 +33,18 @@ int main(int argc, char** argv) {
 			int image_y = y / 224.0f * img->height;
 			
 			int color = image_pos_color(img, image_x, image_y);
-			int red =   color >> 16 & 0xFF - avg_red; 
-			int green = color >> 8  & 0xFF - avg_green; 
-			int blue =  color       & 0xFF - avg_blue;
+			int red =   (color >> 16 & 0xFF) - avg_red; 
+			int green = (color >> 8  & 0xFF) - avg_green; 
+			int blue =  (color       & 0xFF) - avg_blue;
 			
 			ndarray_set_val_param(input, blue,  0, y, x, 0);
 			ndarray_set_val_param(input, green, 0, y, x, 1);
 			ndarray_set_val_param(input, red,   0, y, x, 2);
 		}
 	}
-	image_free(img); 
+	image_free(img);
 	
-	printf("Feed forward\n"); 
-	network_feedforward(network, input); 
+	network_feedforward(network, input);
+	
 	network_free(network); 
 }
