@@ -41,7 +41,7 @@ image* image_load(char* full_file_name) {
 	ptrdiff_t exten_len = full_len - name_len; 
 	char *exten = malloc(exten_len);
 	strncpy(exten, dot + 1, exten_len - 1); 
-	exten[exten_len] = '\0';  
+	exten[exten_len-1] = '\0';
 	
 	image *img = malloc(sizeof(image)); 
 	if (strcmp(exten, "jpg") == 0) {
@@ -85,10 +85,12 @@ image* image_load(char* full_file_name) {
 		pclose(pipe);
 	}
 	else if (strcmp(exten, "ppm") == 0) {
-		printf("It's a ppm!\n"); 
+		printf("Image type is already ppm\n");
+		exit(1);
 	}
 	else {
-		printf("Unknown type!\n"); 
+		printf("Unknown image type '%s'\n", exten);
+		exit(1); 
 	}
 	
 	free(name); 
