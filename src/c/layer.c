@@ -109,7 +109,6 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 
 #ifdef DRAW_PROGRESS
 	printf("\033[u"); // Restore cursor position
-	printf("\033[1A"); // Go up one line
 	printf(" \x1B[36m"); // Color cyan 
 	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
 	printf(bar->digit_format, elapsed_time); 
@@ -155,7 +154,6 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 	
 #ifdef DRAW_PROGRESS
 	printf("\033[u"); // Restore cursor position
-	printf("\033[1A"); // Go up one line
 	printf(" \x1B[36m"); // Color cyan 
 	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
 	printf(bar->digit_format, elapsed_time); 
@@ -192,7 +190,6 @@ void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) {
 	
 #ifdef DRAW_PROGRESS
 	printf("\033[u"); // Restore cursor position
-	printf("\033[1A"); // Go up one line
 	printf(" \x1B[36m"); // Color cyan 
 	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
 	printf(bar->digit_format, elapsed_time); 
@@ -247,7 +244,6 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 	
 #ifdef DRAW_PROGRESS
 	printf("\033[u"); // Restore cursor position
-	printf("\033[1A"); // Go up one line
 	printf(" \x1B[36m"); // Color cyan 
 	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
 	printf(bar->digit_format, elapsed_time); 
