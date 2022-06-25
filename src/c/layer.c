@@ -66,7 +66,7 @@ void layer_free(layer* layer) {
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	printf("Conv2D "); ndarray_fprint(conv_layer->outputs, stdout); printf("\n"); 
-	int padding[4] = {0, 1, 1, 0}; 
+	int padding[4] = {0, 1, 1, 0};
 	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
 	
 	ndarray *outputs = conv_layer->outputs; 

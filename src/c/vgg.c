@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
 	image_free(img);
 	
 	network_feedforward(network, input);
+	network_decode_output(network); 
 	
 	network_free(network); 
 }

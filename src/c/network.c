@@ -1,9 +1,11 @@
 #include <stdlib.h> 
 #include <stdio.h> 
-#include <string.h> 
+#include <string.h>
+#include <sys/stat.h>  
 #include "network.h"
 #include "layer.h" 
-#include "ndarray.h" 
+#include "ndarray.h"
+#include "json.h"  
 
 int random_float_01() {
 	return (float)rand() / (float)RAND_MAX;
@@ -23,6 +25,21 @@ float file_read_float(FILE* file) {
 	float result; 
 	memcpy(&result, buffer, buffer_size);
 	return result; 
+}
+
+char **get_labels_json(json_value* json) {
+	int length = json->u.object.length;
+	char **labels = malloc(sizeof(char*) * length); 
+	for (int index = 0; index < length; index++) {
+		// TODO this function is unsafe; check the data before retrieving it to ensure 
+		// it is in the correct format! 
+		json_object_entry *entry = &(json->u.object.values[index]); 
+		char *str = entry->value->u.array.values[1]->u.string.ptr; 
+		char *label = malloc(strlen(str) + 1); 
+		strcpy(label, str); 
+		labels[index] = label;
+	}
+	return labels; 
 }
 
 network* network_create(char* data_file, char* label_file) {
@@ -81,6 +98,42 @@ network* network_create(char* data_file, char* label_file) {
 		net->layers[i] = layer_create(weight_set_count, weight_set, layer_type, activation_type, outputs); 
 	}
 	
+	// Read labels
+	struct stat file_status; 
+	if (stat(label_file, &file_status) != 0) {
+		fprintf(stderr, "File %s is not found\n", label_file); 
+		exit(1); 
+	}
+	
+	int file_size = file_status.st_size; 
+	char *file_contents = malloc(sizeof(char) * file_size); 
+	
+	FILE *label_fp = fopen(label_file, "rt"); 
+	if (label_fp == NULL) {
+		fprintf(stderr, "Unable to open %s\n", label_file); 
+		exit(1); 
+	}
+	
+	if (fread(file_contents, file_size, 1, label_fp) != 1) {
+		fprintf(stderr, "Unable to read contents of %s\n", label_file); 
+		fclose(label_fp); 
+		free(file_contents); 
+		exit(1); 
+	}
+	fclose(label_fp); 
+	
+	json_value *json = json_parse((json_char*)file_contents, file_size); 
+	if (json == NULL) {
+		fprintf(stderr, "Unable to parse data\n");
+		free(file_contents); 
+		exit(1);
+	}
+	
+	net->labels = get_labels_json(json); 
+	
+	json_value_free(json);
+	free(file_contents); 
+	
 	return net; 
 }
 
@@ -101,9 +154,43 @@ void network_feedforward(network* network, ndarray* inputs) {
 	}
 }
 
+void network_decode_output(network* network) {
+	const int NUM_SCORES = 5; 
+	ND_TYPE scores[6] = { 0 }; // length = NUM_SCORES + 1 
+	char *labels[6]; 
+ 	
+	ndarray *output = network->layers[network->layer_count-1]->outputs; 
+	for (int label_index = 0; label_index < 1000 /* TODO */; label_index++) {
+		ND_TYPE value = ndarray_get_val_param(output, 0, label_index); 
+		scores[0] = value; 
+		labels[0] = network->labels[label_index];
+		for (int score_index = 1; score_index <= NUM_SCORES; score_index++) {
+			if (scores[score_index] < scores[score_index-1]) {
+				ND_TYPE temp_score = scores[score_index]; 
+				scores[score_index] = scores[score_index-1]; 
+				scores[score_index-1] = temp_score; 
+				
+				char *temp_label = labels[score_index]; 
+				labels[score_index] = labels[score_index-1]; 
+				labels[score_index-1] = temp_label;
+			}
+			else break; 
+		}
+	}
+	
+	for (int i = NUM_SCORES; i > 0; i--) {
+		printf("%.5f, %s\n", scores[i], labels[i]); 
+	}
+}
+
 void network_free(network* network) {
 	for (int i = 0; i < network->layer_count; i++) 
 		layer_free(network->layers[i]);
 	free(network->layers);
+	
+	for (int i = 0; i < 1000 /* TODO */; i++) 
+		free(network->labels[i]); 
+	free(network->labels); 
+	
 	free(network);
 }

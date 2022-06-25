@@ -31,11 +31,12 @@ libjpeg:
 
 c: pre-build
 	gcc -o obj/c/vgg.o -c src/c/vgg.c 
-	gcc -o obj/c/network.o -c src/c/network.c 
+	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser
 	gcc -o obj/c/layer.o -c src/c/layer.c 
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c 
 	gcc -o obj/c/image.o -c src/c/image.c
-	gcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o -lm
+	gcc -o obj/c/json.o -c lib/json-parser/json.c 
+	gcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o obj/c/json.o -lm
 	./bin/vgg
 
 python: 
@@ -43,8 +44,8 @@ python:
 
 json: pre-build
 	gcc -o obj/c/json.o -c lib/json-parser/json.c
-	gcc -o obj/c/json_test.o -Ilib/json-parser -c src/json_test.c
-	gcc -o bin/c/json_test obj/c/json_test.o obj/c/json.o -lm
+	gcc -o obj/c/json_test.o -Ilib/json-parser -c src/c/json_test.c
+	gcc -o bin/json_test obj/c/json_test.o obj/c/json.o -lm
 	./bin/json_test data/imagenet_class_index.json
 
 clean: 
