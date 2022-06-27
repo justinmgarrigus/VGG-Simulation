@@ -67,13 +67,6 @@ void layer_free(layer* layer) {
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	printf("Conv2D "); ndarray_fprint(input_layer->outputs, stdout);
-	int padding[4] = {0, 1, 1, 0};
-	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
-	
-	ndarray *outputs = conv_layer->outputs; 
-	ndarray *kernel = conv_layer->weights[0]; 
-	ndarray *bias = conv_layer->weights[1];
-	
 #ifdef DRAW_PROGRESS
 	printf("\033[s"); // Save cursor position 
 	printf("\n"); 
@@ -81,6 +74,13 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 #else 
 	printf("\n"); 
 #endif
+	
+	int padding[4] = {0, 1, 1, 0};
+	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
+	
+	ndarray *outputs = conv_layer->outputs; 
+	ndarray *kernel = conv_layer->weights[0]; 
+	ndarray *bias = conv_layer->weights[1];
 	
 	int counter = 0; 
 	int counter_max = outputs->shape[1] * outputs->shape[2]; 
@@ -106,6 +106,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 #endif 
 		}
 	}	
+	free(inputs); 
 
 #ifdef DRAW_PROGRESS
 	printf("\033[u"); // Restore cursor position
@@ -117,6 +118,8 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	printf("\x1B[0m\n"); // Reset color and newline 
 	progressbar_free(bar); 
 #endif
+	
+	ndarray_log(outputs, "c_log.txt"); 
 }
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 

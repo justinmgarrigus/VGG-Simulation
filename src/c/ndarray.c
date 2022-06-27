@@ -4,34 +4,21 @@
 #include <string.h> 
 #include "ndarray.h" 
 
-ndarray* ndarray_create(int count, int* shape) {
-	int *cumulative = malloc(sizeof(int) * count);
-	cumulative[0] = shape[0]; 
-	for (int i = 1; i < count; i++) 
-		cumulative[i] = cumulative[i-1] * shape[i]; 
-	
-	ND_TYPE *arr = malloc(sizeof(ND_TYPE) * cumulative[count-1]);
-	int size = sizeof(ND_TYPE); 
-	
-	void *data = arr; 
-	void *result = arr; 
-	for (int dim = count-1; dim > 0; dim--) {
-		result = malloc(sizeof(void*) * cumulative[dim-1]); 
-		int index = 0; 
-		for (int row = 0; row < cumulative[dim]; row += shape[dim]) {
-			((void**)result)[index++] = data + size * row;
-		}
-		data = result; 
-		size = sizeof(void*);
-	}
+ndarray* ndarray_create(int dim, int* shape) {
+	int *cumulative = malloc(sizeof(int) * dim); 
+	cumulative[dim-1] = 1; 
+	for (int i = dim-2; i >= 0; i--) 
+		cumulative[i] = cumulative[i+1] * shape[i+1]; 
+	int count = cumulative[0] * shape[0]; 
+	ND_TYPE *arr = malloc(sizeof(ND_TYPE) * count); 
 	
 	ndarray *nd = malloc(sizeof(ndarray)); 
-	nd->dim = count; 
-	nd->shape = malloc(sizeof(int) * count); 
-	memcpy(nd->shape, shape, sizeof(int) * count); 
+	nd->dim = dim; 
+	nd->shape = malloc(sizeof(int) * dim); 
+	memcpy(nd->shape, shape, sizeof(int) * dim); 
 	nd->cumulative = cumulative; 
-	nd->arr = result; 
-	
+	nd->arr = arr; 
+	nd->count = count; 
 	return nd; 
 }
 
@@ -60,22 +47,16 @@ ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
 }
 
 void ndarray_free(ndarray* nd) {
-	void *ptr = nd->arr; 
-	for (int i = 0; i < nd->dim; i++) {
-		void *next = *((void**)ptr);
-		free(ptr); 
-		ptr = next; 
-	}
-	free(nd->shape);
+	free(nd->arr); 
+	free(nd->shape); 
 	free(nd->cumulative); 
-	free(nd);
 }
 
 ND_TYPE ndarray_get_val_list(ndarray* nd, int* pos) {
-	void *result = nd->arr; 
-	for (int i = 0; i < nd->dim - 1; i++)
-		result = *((void**)result + pos[i]);
-	return *((ND_TYPE*)result + pos[nd->dim-1]); 
+	int index = 0;
+	for (int i = 0; i < nd->dim; i++) 
+		index += nd->cumulative[i] * pos[i]; 
+	return nd->arr[index]; 
 }
 
 ND_TYPE ndarray_get_val_param(ndarray* nd, ...) {
@@ -91,10 +72,10 @@ ND_TYPE ndarray_get_val_param(ndarray* nd, ...) {
 }
 
 void ndarray_set_val_list(ndarray* nd, int* pos, ND_TYPE value) {
-	void *result = nd->arr; 
-	for (int i = 0; i < nd->dim - 1; i++) 
-		result = *((void**)result + pos[i]); 
-	*((ND_TYPE*)result + pos[nd->dim-1]) = value; 
+	int index = 0; 
+	for (int i = 0; i < nd->dim; i++) 
+		index += nd->cumulative[i] * pos[i]; 
+	nd->arr[index] = value;
 }
 
 void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...) {
@@ -114,17 +95,17 @@ void ndarray_deep_display(ndarray* nd) {
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = 0;
 	
-	int num_printed = 0; 
+	int index = 0; 
 	do {
 		printf("nd"); 
 		for (int i = 0; i < nd->dim; i++) { 
 			printf("[%d]", pos[i]);
 		}			
 		printf(" = "); 
-		printf(ND_DISPLAY, ndarray_get_val_list(nd, pos)); 
+		printf(ND_DISPLAY, nd->arr[index++]); 
 		printf("\n");
 	}
-	while (ndarray_decimal_count(nd->dim, pos, nd->shape) && ++num_printed < 1500); 
+	while (ndarray_decimal_count(nd->dim, pos, nd->shape)); 
 	free(pos); 
 }
 
@@ -139,14 +120,9 @@ void ndarray_log(ndarray* nd, char* file_name) {
 		fprintf(fp, "%d ", nd->shape[i]);
 	fprintf(fp, "\n"); 
 	
-	int *pos = malloc(sizeof(int) * nd->dim);
-	for (int i = 0; i < nd->dim; i++) 
-		pos[i] = 0;
+	for (int i = 0; i < nd->count; i++) 
+		fprintf(fp, "%f ", nd->arr[i]); // TODO add ND_DISPLAY 
 	
-	do {
-		fprintf(fp, "%f ", ndarray_get_val_list(nd, pos)); 
-	}
-	while (ndarray_decimal_count(nd->dim, pos, nd->shape));
 	fclose(fp); 
 }
 

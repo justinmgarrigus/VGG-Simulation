@@ -27,6 +27,19 @@ size = im.size
 
 print(model.summary()) 
 
+
+def ndarray_log(arr, name='py_log.txt'): 
+	file = open(name, 'w') 
+	for s in arr.shape: 
+		file.write(str(s) + " ")
+	file.write('\n')
+	
+	for x in np.nditer(arr):
+		file.write(str(x) + " ")
+	
+	file.close() 
+	
+
 # Preprocessing: getting the average R, G, and B values
 avg = [0, 0, 0]  
 for x in range(size[0]): 
@@ -123,6 +136,8 @@ def conv_2D(layer, inputs):
 	
 	max_items = outputs.shape[1] * outputs.shape[2] * outputs.shape[3]
 	print(str(counter) + '/' + str(max_items), 'items replaced (' + str(round(counter / max_items * 100, 1)) + '%)')  
+	
+	ndarray_log(outputnp)
 	
 	# Replace with required data type 
 	eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)

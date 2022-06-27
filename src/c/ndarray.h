@@ -7,8 +7,9 @@
 typedef struct ndarray {
 	int dim; 
 	int *shape; 
+	int count; 
 	int *cumulative; 
-	void *arr; 
+	ND_TYPE *arr; 
 } ndarray; 
 
 ndarray* ndarray_create(int count, int* shape);
