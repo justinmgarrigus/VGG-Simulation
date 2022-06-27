@@ -2,28 +2,23 @@
 #include <stdio.h> 
 #include <string.h>
 #include <sys/stat.h>  
+#include <stdint.h> 
 #include "network.h"
 #include "layer.h" 
 #include "ndarray.h"
-#include "json.h" 
+#include "json.h"
 
-int random_float_01() {
-	return (float)rand() / (float)RAND_MAX;
+int32_t file_read_int(FILE* file, unsigned char* buffer) {
+	// Data is encoded in .nn files as 32-bit integers, but they can be saved as 16-bit
+	// ints internally inside the network struct. 
+	fread(buffer, sizeof(int32_t), 1, file);
+	return buffer[0] << 0b0100 | buffer[1] << 0b0010 | buffer[2] << 0b0001 | buffer[3]; 
 }
 
-int file_read_int(FILE* file) {
-	const int buffer_size = sizeof(int); 
-	unsigned char buffer[buffer_size]; 
-	fread(buffer, buffer_size, 1, file); 
-	return buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]; 
-}
-
-float file_read_float(FILE* file) {
-	const int buffer_size = sizeof(float); 
-	unsigned char buffer[buffer_size]; 
-	fread(buffer, buffer_size, 1, file); 
+float file_read_float(FILE* file, unsigned char* buffer) {
+	fread(buffer, sizeof(float), 1, file); 
 	float result; 
-	memcpy(&result, buffer, buffer_size);
+	memcpy(&result, buffer, sizeof(float));
 	return result; 
 }
 
@@ -49,31 +44,33 @@ network* network_create(char* data_file, char* label_file) {
 		exit(1); 
 	}
 	
-	int magic_number = file_read_int(file); 
+	unsigned char *buffer = malloc(sizeof(int) > sizeof(float) ? sizeof(int) : sizeof(float)); 
+	
+	int magic_number = file_read_int(file, buffer); 
 	if (magic_number != 1234) {
 		fprintf(stderr, "Magic number is %d, 1234 expected. Check if file is corrupted.\n", magic_number); 
 		exit(1); 
 	}
 	
 	network* net = malloc(sizeof(net));
-	net->layer_count = file_read_int(file);
+	net->layer_count = file_read_int(file, buffer);
 	net->layers = malloc(sizeof(layer*) * net->layer_count);
 	
 	for (int i = 0; i < net->layer_count; i++) {
-		int layer_type = file_read_int(file); 
+		int layer_type = file_read_int(file, buffer); 
 		int activation_type; 
 		if (layer_type == layer_type_convolutional || layer_type == layer_type_dense)
-			activation_type = file_read_int(file);
+			activation_type = file_read_int(file, buffer);
 		else 
 			activation_type = 0; 
 		
-		int weight_set_count = file_read_int(file);  
+		int weight_set_count = file_read_int(file, buffer);  
 		ndarray **weight_set = malloc(sizeof(ndarray*) * weight_set_count); 
 		for (int set_index = 0; set_index < weight_set_count; set_index++) {
-			int dimensions = file_read_int(file); 
+			int dimensions = file_read_int(file, buffer); 
 			int *shape = malloc(sizeof(int) * dimensions); 
 			for (int dimension = 0; dimension < dimensions; dimension++)
-				shape[dimension] = file_read_int(file); 
+				shape[dimension] = file_read_int(file, buffer); 
 			
 			int *counter = malloc(sizeof(int) * dimensions); 
 			for (int c = 0; c < dimensions; c++) 
@@ -81,7 +78,7 @@ network* network_create(char* data_file, char* label_file) {
 			
 			ndarray *weights = ndarray_create(dimensions, shape);
 			do {
-				ndarray_set_val_list(weights, counter, file_read_float(file)); 
+				ndarray_set_val_list(weights, counter, file_read_float(file, buffer)); 
 			}
 			while (ndarray_decimal_count(dimensions, counter, shape)); 
 			free(counter); 
@@ -89,10 +86,10 @@ network* network_create(char* data_file, char* label_file) {
 			weight_set[set_index] = weights; 
 		}
 		
-		int output_length = file_read_int(file); 
+		int output_length = file_read_int(file, buffer); 
 		int *output_shape = malloc(sizeof(int) * output_length);
 		for (int output_index = 0; output_index < output_length; output_index++)
-			output_shape[output_index] = file_read_int(file);
+			output_shape[output_index] = file_read_int(file, buffer);
 		ndarray *outputs = ndarray_create(output_length, output_shape); 
 		
 		net->layers[i] = layer_create(weight_set_count, weight_set, layer_type, activation_type, outputs); 

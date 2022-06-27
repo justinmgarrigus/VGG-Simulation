@@ -63,12 +63,14 @@ ND_TYPE ndarray_get_val_param(ndarray* nd, ...) {
 	va_list valist; 
 	va_start(valist, nd); 
 	
-	int pos[nd->dim]; 
+	int *pos = malloc(sizeof(int) * nd->dim);
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = va_arg(valist, int); 
 	
 	va_end(valist); 
-	return ndarray_get_val_list(nd, pos);
+	ND_TYPE val = ndarray_get_val_list(nd, pos); 
+	free(pos); 
+	return val;
 }
 
 void ndarray_set_val_list(ndarray* nd, int* pos, ND_TYPE value) {
@@ -82,12 +84,13 @@ void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...) {
 	va_list valist; 
 	va_start(valist, value); 
 	
-	int pos[nd->dim]; 
+	int *pos = malloc(sizeof(int) * nd->dim); 
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = va_arg(valist, int); 
 	
 	va_end(valist); 
 	ndarray_set_val_list(nd, pos, value);
+	free(pos); 
 }
 
 void ndarray_deep_display(ndarray* nd) {
