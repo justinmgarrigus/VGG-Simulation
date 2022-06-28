@@ -124,6 +124,42 @@ void ndarray_free_gpu(ndarray* nd) {
 	cudaFree(nd); 
 }
 
+ndarray* ndarray_copy(ndarray* base, enum cudaMemcpyKind kind) {
+	ndarray *new_nd; 
+	if (kind == cudaMemcpyDeviceToHost) {
+		ndarray *nd = malloc(sizeof(ndarray)); 
+		cudaMemcpy(nd, base, sizeof(ndarray), kind); 
+		
+		new_nd = malloc(sizeof(ndarray)); 
+		new_nd->dim = nd->dim; 
+		new_nd->shape = malloc(sizeof(int) * new_nd->dim); 
+		cudaMemcpy(new_nd->shape, nd->shape, sizeof(int) * new_nd->dim, kind); 
+		new_nd->count = nd->count; 
+		new_nd->cumulative = malloc(sizeof(int) * new_nd->dim); 
+		cudaMemcpy(new_nd->cumulative, nd->cumulative, sizeof(int) * new_nd->dim, kind); 
+		new_nd->arr = malloc(sizeof(ND_TYPE) * new_nd->count); 
+		cudaMemcpy(new_nd->arr, nd->arr, sizeof(ND_TYPE) * new_nd->count, kind);
+		free(nd); 
+	}
+	else if (kind == cudaMemcpyHostToDevice) {
+		ndarray *nd = malloc(sizeof(ndarray));
+		nd->dim = base->dim; 
+		cudaMalloc(&(nd->shape), sizeof(int) * base->dim); 
+		cudaMemcpy(nd->shape, base->shape, sizeof(int) * base->dim, kind); 
+		nd->count = base->count; 
+		cudaMalloc(&(nd->cumulative), sizeof(int) * base->dim); 
+		cudaMemcpy(nd->cumulative, base->cumulative, sizeof(int) * base->dim, kind); 
+		cudaMalloc(&(nd->arr), sizeof(ND_TYPE) * base->count); 
+		cudaMemcpy(nd->arr, base->arr, sizeof(ND_TYPE) * base->count, kind); 
+		
+		cudaMalloc(&new_nd, sizeof(ndarray)); 
+		cudaMemcpy(new_nd, nd, sizeof(ndarray), kind); 
+		free(nd); 
+	}
+	
+	return new_nd;
+}
+
 ND_TYPE ndarray_get_val_list(ndarray* nd, int* pos) {
 	int index = 0;
 	for (int i = 0; i < nd->dim; i++) 
