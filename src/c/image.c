@@ -3,8 +3,6 @@
 #include <string.h> 
 #include <stddef.h> // ptrdiff_t 
 #include <sys/types.h> // pid_t
-#include <sys/wait.h> // wait
-#include <unistd.h> // fork 
 #include "image.h"
 
 // Returns 1 if whitespace, 0 otherwise. 
@@ -30,6 +28,36 @@ void file_read_word(char* buffer, FILE* file) {
 	buffer[index] = '\0'; 
 }
 
+image* parse_ppm(FILE* file) {
+	if (fgetc(file) != 'P' || fgetc(file) != '6') {
+		fprintf(stderr, "Magic number not recognized in ppm file!\n"); 
+		exit(1); 
+	}
+	fgetc(file); // whitespace 
+	
+	image *img = malloc(sizeof(image));
+	
+	char buffer[32];
+	file_read_word(buffer, file); 
+	img->width = atoi(buffer); 
+	file_read_word(buffer, file); 
+	img->height = atoi(buffer); 
+	file_read_word(buffer, file);
+	int dim = img->width * img->height; 		
+	img->colors = malloc(sizeof(int) * dim); 
+	
+	int max_color = atoi(buffer);
+	for (int i = 0; i < dim; i++) {
+		unsigned char r = fgetc(file);
+		unsigned char g = fgetc(file); 
+		unsigned char b = fgetc(file); 
+		int color = r << 16 | g << 8 | b; 
+		img->colors[i] = color;
+	}
+	
+	return img; 
+}
+
 image* image_load(char* full_file_name) {
 	// Check if a ppm file already exists in this format in the data directory. 
 	ptrdiff_t full_len = strlen(full_file_name);
@@ -43,8 +71,9 @@ image* image_load(char* full_file_name) {
 	strncpy(exten, dot + 1, exten_len - 1); 
 	exten[exten_len-1] = '\0';
 	
-	image *img = malloc(sizeof(image)); 
+	image *img;
 	if (strcmp(exten, "jpg") == 0) {
+#if defined(__linux__)
 		char *base = "./lib/libjpeg/djpeg "; // includes space
 		int command_length = strlen(base) + strlen(full_file_name); 
 		char *command = malloc(command_length + 1); 
@@ -57,36 +86,19 @@ image* image_load(char* full_file_name) {
 		if (pipe == NULL) {
 			fprintf(stderr, "Pipe system call failed\n"); 
 			exit(1); 
-		} 
-		
-		if (fgetc(pipe) != 'P' || fgetc(pipe) != '6') {
-			fprintf(stderr, "Magic number not recognized in djpeg command!\n"); 
-			exit(1); 
 		}
-		fgetc(pipe); // whitespace 
 		
-		char buffer[32];
-		file_read_word(buffer, pipe); 
-		img->width = atoi(buffer); 
-		file_read_word(buffer, pipe); 
-		img->height = atoi(buffer); 
-		file_read_word(buffer, pipe);
-		int dim = img->width * img->height; 		
-		img->colors = malloc(sizeof(int) * dim); 
-		
-		int max_color = atoi(buffer);
-		for (int i = 0; i < dim; i++) {
-			unsigned char r = fgetc(pipe);
-			unsigned char g = fgetc(pipe); 
-			unsigned char b = fgetc(pipe); 
-			int color = r << 16 | g << 8 | b; 
-			img->colors[i] = color;
-		}
+		img = parse_ppm(pipe);
 		pclose(pipe);
+#else 
+		fprintf(stderr, "JPG loading via pipes are unsupported on Windows devices!\n"); 
+		exit(1); 
+#endif 
 	}
 	else if (strcmp(exten, "ppm") == 0) {
-		printf("Image type is already ppm\n");
-		exit(1);
+		FILE *file = fopen(full_file_name, "r"); 
+		img = parse_ppm(file);
+		fclose(file); 
 	}
 	else {
 		printf("Unknown image type '%s'\n", exten);

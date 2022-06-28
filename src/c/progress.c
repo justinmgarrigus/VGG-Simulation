@@ -51,11 +51,15 @@ void progressbar_clear(struct progressbar* bar) {
 }
 
 time_t current_time_millis() {
+#if defined(__linux__)
 	struct timespec spec; 
 	clock_gettime(CLOCK_REALTIME, &spec); 
 	
 	time_t s = spec.tv_sec; 
 	long ms = round(spec.tv_nsec / 1.0e6); 
 	
-	return s * 1000 + ms; 
+	return s * 1000 + ms;
+#elif defined(__WINDOWS__)
+	return 0; 
+#endif 
 }

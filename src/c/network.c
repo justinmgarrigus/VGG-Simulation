@@ -8,11 +8,11 @@
 #include "ndarray.h"
 #include "json.h"
 
-int32_t file_read_int(FILE* file, unsigned char* buffer) {
+uint32_t file_read_int(FILE* file, unsigned char* buffer) {
 	// Data is encoded in .nn files as 32-bit integers, but they can be saved as 16-bit
-	// ints internally inside the network struct. 
-	fread(buffer, sizeof(int32_t), 1, file);
-	return buffer[0] << 0b0100 | buffer[1] << 0b0010 | buffer[2] << 0b0001 | buffer[3]; 
+	// ints internally inside the network struct if the system architecture wants. 
+	fread(buffer, sizeof(uint32_t), 1, file);
+	return buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]; 
 }
 
 float file_read_float(FILE* file, unsigned char* buffer) {

@@ -4,8 +4,13 @@
 #include "image.h" 
 
 int main(int argc, char** argv) {
-	network *network = network_create("data/network.nn", "data/imagenet_class_index.json");
-	image *img = image_load("data/dog.jpg");
+	if (argc != 4) {
+		printf("Format: ./vgg <network.nn> <labels.json> <image.img>\n"); 
+		exit(1); 
+	}
+	
+	network *network = network_create(argv[1], argv[2]);
+	image *img = image_load(argv[3]);
 	
 	int sum_red = 0; 
 	int sum_green = 0; 

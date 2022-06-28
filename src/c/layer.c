@@ -85,6 +85,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	int counter = 0; 
 	int counter_max = outputs->shape[1] * outputs->shape[2]; 
 	for (int x = 0; x < outputs->shape[1]; x++) {
+		printf("%d\n", x); 
 		for (int y = 0; y < outputs->shape[2]; y++) {
 			for (int filter_index = 0; filter_index < outputs->shape[3]; filter_index++) {
 				ND_TYPE result = ndarray_get_val_param(bias, filter_index);  
