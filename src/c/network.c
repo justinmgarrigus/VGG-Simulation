@@ -4,7 +4,6 @@
 #include <sys/stat.h>  
 #include <stdint.h> 
 #include "network.h"
-#include "layer.h" 
 #include "ndarray.h"
 #include "json.h"
 

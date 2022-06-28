@@ -2,11 +2,18 @@
 #include <stdio.h> 
 #include <string.h> 
 #include <math.h> 
-#include "layer.h" 
-#include "progress.h" 
+#include "cuda_runtime.h" 
+#include "device_launch_parameters.h" 
+
+// Cuda uses a C++ compiler; this tells them to compile these files as if they 
+// were using a C-style compiler. W
+extern "C" {
+	#include "layer.h"
+	#include "progress.h" 
+}
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
-	layer *lr = malloc(sizeof(layer));
+	layer *lr = (layer*)malloc(sizeof(layer));
 	
 	lr->weight_set_count = weight_set_count; 
 	lr->weights = weights; 
@@ -74,7 +81,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 #else 
 	printf("\n"); 
 #endif
-	
+
 	int padding[4] = {0, 1, 1, 0};
 	ndarray *inputs = ndarray_pad(input_layer->outputs, padding);
 	
@@ -85,7 +92,6 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	int counter = 0; 
 	int counter_max = outputs->shape[1] * outputs->shape[2]; 
 	for (int x = 0; x < outputs->shape[1]; x++) {
-		printf("%d\n", x); 
 		for (int y = 0; y < outputs->shape[2]; y++) {
 			for (int filter_index = 0; filter_index < outputs->shape[3]; filter_index++) {
 				ND_TYPE result = ndarray_get_val_param(bias, filter_index);  
@@ -107,7 +113,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 #endif 
 		}
 	}	
-	free(inputs); 
+	free(inputs);
 
 #ifdef DRAW_PROGRESS
 	printf("\033[u"); // Restore cursor position
@@ -119,8 +125,6 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	printf("\x1B[0m\n"); // Reset color and newline 
 	progressbar_free(bar); 
 #endif
-	
-	ndarray_log(outputs, "c_log.txt"); 
 }
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
@@ -181,7 +185,7 @@ void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) {
 	printf("\n"); 
 #endif
 	
-	int *pos = malloc(sizeof(int) * input->dim);
+	int *pos = (int*)malloc(sizeof(int) * input->dim);
 	for (int i = 0; i < input->dim; i++)
 		pos[i] = 0;
 	
