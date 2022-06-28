@@ -13,8 +13,11 @@ typedef struct ndarray {
 } ndarray; 
 
 ndarray* ndarray_create(int count, int* shape);
+ndarray* ndarray_create_gpu(int count, int* shape); 
 ndarray* ndarray_pad(ndarray* base, int* shape_pad); 
+ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad); 
 void ndarray_free(ndarray* nd);
+void ndarray_free_gpu(ndarray* nd); 
 ND_TYPE ndarray_get_val_list(ndarray* nd, int* pos); 
 ND_TYPE ndarray_get_val_param(ndarray* nd, ...); 
 void ndarray_set_val_list(ndarray* nd, int* pos, ND_TYPE value); 

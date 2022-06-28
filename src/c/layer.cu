@@ -14,7 +14,6 @@ extern "C" {
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
 	layer *lr = (layer*)malloc(sizeof(layer));
-	
 	lr->weight_set_count = weight_set_count; 
 	lr->weights = weights; 
 	lr->outputs = outputs; 

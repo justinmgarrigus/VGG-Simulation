@@ -2,6 +2,8 @@
 #include <stdlib.h> 
 #include <stdarg.h> 
 #include <string.h> 
+#include "cuda_runtime.h" 
+#include "device_launch_parameters.h" 
 #include "ndarray.h" 
 
 ndarray* ndarray_create(int dim, int* shape) {
@@ -20,6 +22,41 @@ ndarray* ndarray_create(int dim, int* shape) {
 	nd->arr = arr; 
 	nd->count = count; 
 	return nd; 
+}
+
+	int dim; 
+	int *shape; 
+	int count; 
+	int *cumulative; 
+	ND_TYPE *arr; 
+
+ndarray* ndarray_create_gpu(int dim, int* shape) {
+	int *cumulative = malloc(sizeof(int) * dim); 
+	cumulative[dim-1] = 1; 
+	for (int i = dim-2; i >= 0; i--) 
+		cumulative[i] = cumulative[i+1] * shape[i+1]; 
+	int *d_cumulative; cudaMalloc(&d_cumulative, sizeof(int) * dim); 
+	cudaMemcpy(d_cumulative, cumulative, sizeof(int) * dim, cudaMemcpyHostToDevice); 
+	free(cumulative); 
+	
+	int count = cumulative[0] * shape[0]; 
+	ND_TYPE *d_arr; cudaMalloc(&d_arr, sizeof(ND_TYPE) * count);
+
+	int *d_shape; cudaMalloc(&d_shape, sizeof(int) * dim); 
+	cudaMemcpy(d_shape, shape, sizeof(int) * dim, cudaMemcpyHostToDevice); 
+
+	ndarray *nd = malloc(sizeof(ndarray)); 
+	nd->dim = dim; 
+	nd->shape = d_shape; 
+	nd->cumulative = d_cumulative; 
+	nd->arr = d_arr; 
+	nd->count = count; 
+	
+	ndarray *d_nd; cudaMalloc(&d_nd, sizeof(ndarray)); 
+	cudaMemcpy(d_nd, nd, sizeof(ndarray), cudaMemcpyHostToDevice); 
+	free(nd); 
+	
+	return d_nd; 
 }
 
 ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
@@ -46,10 +83,45 @@ ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
 	return new_arr; 
 }
 
+ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad) {
+	ndarray *padded_nd = ndarray_pad(base, shape_pad); 
+	
+	int *d_shape; cudaMalloc(&d_shape, sizeof(int) * padded_nd->dim); 
+	cudaMemcpy(d_shape, padded_nd->shape, sizeof(int) * padded_nd->dim, cudaMemcpyHostToDevice); 
+	
+	int *d_cumulative; cudaMalloc(&d_cumulative, sizeof(int) * padded_nd->dim); 
+	cudaMemcpy(d_cumulative, padded_nd->cumulative, sizeof(int) * padded_nd->dim, cudaMemcpyHostToDevice); 
+	
+	ND_TYPE *d_arr; cudaMalloc(&d_arr, sizeof(ND_TYPE) * padded_nd->count); 
+	cudaMemcpy(d_arr, padded_nd->arr, sizeof(ND_TYPE) * padded_nd->count, cudaMemcpyHostToDevice);
+
+	ndarray *padded = malloc(sizeof(ndarray)); 
+	padded->dim = padded_nd->dim; 
+	padded->shape = d_shape; 
+	padded->count = padded_nd->count; 
+	padded->cumulative = d_cumulative; 
+	padded->arr = d_arr; 
+	
+	ndarray *d_padded; cudaMalloc(&d_padded, sizeof(ndarray)); 
+	cudaMemcpy(d_padded, padded, sizeof(ndarray), cudaMemcpyHostToDevice); 
+	
+	ndarray_free(padded_nd); 
+	free(padded); 
+	return d_padded; 
+}
+
 void ndarray_free(ndarray* nd) {
 	free(nd->arr); 
 	free(nd->shape); 
-	free(nd->cumulative); 
+	free(nd->cumulative);
+	free(nd); 
+}
+
+void ndarray_free_gpu(ndarray* nd) {
+	cudaFree(nd->arr); 
+	cudaFree(nd->shape); 
+	cudaFree(nd->cumulative); 
+	cudaFree(nd); 
 }
 
 ND_TYPE ndarray_get_val_list(ndarray* nd, int* pos) {
