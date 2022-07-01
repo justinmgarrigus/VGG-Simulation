@@ -45,12 +45,17 @@ image* parse_ppm(FILE* file) {
 	file_read_word(buffer, file);
 	int dim = img->width * img->height; 		
 	img->colors = malloc(sizeof(int) * dim); 
-	
+
 	int max_color = atoi(buffer);
+	if (max_color != 255) {
+		fprintf(stderr, "Error: .ppm files with two-byte colors not supported!\n");
+		exit(1); 
+	}
+
 	for (int i = 0; i < dim; i++) {
 		unsigned char r = fgetc(file);
 		unsigned char g = fgetc(file); 
-		unsigned char b = fgetc(file); 
+		unsigned char b = fgetc(file);  
 		int color = r << 16 | g << 8 | b; 
 		img->colors[i] = color;
 	}
@@ -96,7 +101,7 @@ image* image_load(char* full_file_name) {
 #endif 
 	}
 	else if (strcmp(exten, "ppm") == 0) {
-		FILE *file = fopen(full_file_name, "r"); 
+		FILE *file = fopen(full_file_name, "rb"); 
 		img = parse_ppm(file);
 		fclose(file); 
 	}
