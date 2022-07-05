@@ -132,7 +132,7 @@ __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* ou
 }
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
-	printf("Conv2D\n"); 
+	printf("--Conv2D\n"); 
 
 	// Max thread count 
 	cudaDeviceProp prop; 
@@ -175,7 +175,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 }
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
-	printf("MaxPooling\n");
+	printf("--MaxPooling\n");
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
 	ndarray *output = ndarray_copy(pool_layer->outputs, cudaMemcpyDeviceToHost);
 	
@@ -199,7 +199,7 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 }
 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
-	printf("Flatten\n");
+	printf("--Flatten\n");
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
 	ndarray *output = ndarray_copy(flatten_layer->outputs, cudaMemcpyDeviceToHost); 
 	
@@ -253,7 +253,7 @@ __global__ void layer_dense_gpu_relu(ndarray* dense) {
 
 int dense_counter = 0; // TODO remove, replace with function pointer. 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { 
-	printf("Dense\n"); 
+	printf("--Dense\n"); 
 	
 	// Max thread count 
 	cudaDeviceProp prop;

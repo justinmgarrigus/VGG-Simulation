@@ -37,6 +37,7 @@ char **get_labels_json(json_value* json) {
 }
 
 network* network_create(char* data_file, char* label_file) {
+	printf("Creating network from file '%s' with labels '%s'\n", data_file, label_file); 
 	FILE *file = fopen(data_file, "rb");
 	if (file == NULL) {
 		fprintf(stderr, "Error opening file %s\n", data_file); 
@@ -134,6 +135,7 @@ network* network_create(char* data_file, char* label_file) {
 }
 
 void network_feedforward(network* network, ndarray* inputs) {
+	printf("Feedforward:\n"); 
 	network->layers[0]->outputs = ndarray_copy(inputs, cudaMemcpyHostToDevice); 
 	
 	// Feed the values forward. 
@@ -166,8 +168,9 @@ void network_decode_output(network* network) {
 		}
 	}
 	
+	printf("Predictions:\n"); 
 	for (int i = NUM_SCORES; i > 0; i--) {
-		printf("%.5f, %s\n", scores[i], labels[i]); 
+		printf(" %.5f, %s\n", scores[i], labels[i]); 
 	}
 }
 

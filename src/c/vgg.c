@@ -3,14 +3,9 @@
 #include "network.h"
 #include "image.h" 
 
-int main(int argc, char** argv) {
-	if (argc != 4) {
-		printf("Format: ./vgg <network.nn> <labels.json> <image.img>\n"); 
-		exit(1); 
-	}
-	
-	network *network = network_create(argv[1], argv[2]);
-	image *img = image_load(argv[3]);
+void vgg_image(char* file_name, ndarray* input) {
+	printf("Loading image: %s\n", file_name); 
+	image *img = image_load(file_name);
 	
 	int sum_red = 0; 
 	int sum_green = 0; 
@@ -18,18 +13,13 @@ int main(int argc, char** argv) {
 	int size = img->width * img->height; 
 	for (int i = 0; i < size; i++) {
 		int color = img->colors[i]; 
-		sum_red += color >> 16 & 0xFF; 
-		sum_green += color >> 8 & 0xFF; 
-		sum_blue += color & 0xFF; 
+		sum_red   += color >> 16 & 0xFF; 
+		sum_green += color >> 8  & 0xFF; 
+		sum_blue  += color       & 0xFF; 
 	}
 	int avg_red = sum_red / size; 
 	int avg_green = sum_green / size; 
 	int avg_blue = sum_blue / size;
-	
-	int *length = malloc(sizeof(int) * 4); 
-	length[0] = 1; length[1] = 224; length[2] = 224; length[3] = 3; 
-	ndarray *input = ndarray_create(4, length); 
-	free(length); 
 	
 	int num_printed = 0; 
 	for (int x = 0; x < 224; x++) {
@@ -48,8 +38,21 @@ int main(int argc, char** argv) {
 		}
 	}
 	image_free(img);
+}
+
+int main(int argc, char** argv) {
+	if (argc != 4) {
+		printf("Format: ./vgg <network.nn> <labels.json> <image.img>\n"); 
+		exit(1); 
+	}
 	
-	network_feedforward(network, input);
+	network *network = network_create(argv[1], argv[2]);
+	
+	int length[4] = { 1, 224, 224, 3 };
+	ndarray *input = ndarray_create(4, length); 
+	vgg_image(argv[3], input); 
+	
+	network_feedforward(network, input); printf("\n");
 	network_decode_output(network); 
 	
 	network_free(network); 
