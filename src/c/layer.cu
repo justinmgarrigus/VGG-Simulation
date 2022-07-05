@@ -9,7 +9,6 @@
 // were using a C-style compiler.
 extern "C" {
 	#include "layer.cuh"
-	#include "progress.h" 
 }
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs) {
@@ -71,7 +70,7 @@ layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type typ
 }
 
 void layer_free(layer* layer) {
-	ndarray** weights = (ndarray**)malloc(sizeof(ndarray*) * layer->weight_set_count); 
+	ndarray **weights = (ndarray**)malloc(sizeof(ndarray*) * layer->weight_set_count); 
 	cudaMemcpy(weights, layer->weights, sizeof(ndarray*) * layer->weight_set_count, cudaMemcpyDeviceToHost);
 	for (int i = 0; i < layer->weight_set_count; i++)
 		ndarray_free_gpu(weights[i]);
@@ -83,7 +82,7 @@ void layer_free(layer* layer) {
 }
 
 void layer_log(layer* layer, int index) {
-	ndarray* outputs = ndarray_copy(layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray *outputs = ndarray_copy(layer->outputs, cudaMemcpyDeviceToHost);
 	char buffer[20];
 	snprintf(buffer, 20, "data/logs/c%d.txt", index);
 	ndarray_log(outputs, buffer);
@@ -141,17 +140,17 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	int max_threads_per_block = prop.maxThreadsPerBlock; 
 
 	// Move outputs to the host
-	ndarray* h_outputs = ndarray_copy(conv_layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray *h_outputs = ndarray_copy(conv_layer->outputs, cudaMemcpyDeviceToHost);
 	
 	// Move inputs to the host
-	ndarray* h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray *h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
 
 	// Pad input array
 	int padding[4] = {0, 1, 1, 0};
 	ndarray *h_inputs_padded = ndarray_pad(h_inputs, padding);
 
 	// Move back to the device
-	ndarray* d_inputs = ndarray_copy(h_inputs_padded, cudaMemcpyHostToDevice);
+	ndarray *d_inputs = ndarray_copy(h_inputs_padded, cudaMemcpyHostToDevice);
 
 	int x_dim = h_outputs->shape[1];
 	int y_dim = h_outputs->shape[2];
@@ -194,24 +193,9 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 				ndarray_set_val_param(output, max_value, 0, offset_x / 2, offset_y / 2, z); 
 			}
 		}
-		
-#ifdef DRAW_PROGRESS
-		progressbar_draw(bar, (double)offset_x / input->shape[1]); 
-#endif 
 	}
 
 	pool_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
-	
-#ifdef DRAW_PROGRESS
-	printf("\033[u"); // Restore cursor position
-	printf(" \x1B[36m"); // Color cyan 
-	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
-	printf(bar->digit_format, elapsed_time); 
-	network_operation_time += elapsed_time; 
-	printf(" \x1B[35m(%.2f)", network_operation_time); // Color magenta, total time
-	printf("\x1B[0m\n"); // Reset color and newline 
-	progressbar_free(bar);  
-#endif
 }
 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
@@ -231,23 +215,12 @@ void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) {
 	free(pos); 
 
 	flatten_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice);
-	
-#ifdef DRAW_PROGRESS
-	printf("\033[u"); // Restore cursor position
-	printf(" \x1B[36m"); // Color cyan 
-	double elapsed_time = (current_time_millis() - bar->time_started) / 1000.0; 
-	printf(bar->digit_format, elapsed_time); 
-	network_operation_time += elapsed_time; 
-	printf(" \x1B[35m(%.2f)", network_operation_time); // Color magenta, total time
-	printf("\x1B[0m\n"); // Reset color and newline 
-	progressbar_free(bar); 
-#endif
 }
 
 __global__ void layer_dense_feedforward_gpu(ndarray* inputs, ndarray* outputs, ndarray** weight_set, int blocks, int threads) {
 	// TODO: assuming it will always be 1024. 
-	ndarray* weights = weight_set[0];
-	ndarray* biases = weight_set[1];
+	ndarray *weights = weight_set[0];
+	ndarray *biases = weight_set[1];
 
 	int j = blockIdx.x * threads + threadIdx.x;
 	if (j < weights->shape[1]) {
@@ -288,16 +261,16 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 	int max_threads_per_block = prop.maxThreadsPerBlock;
 
 	// Move outputs to the host
-	ndarray* h_outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray *h_outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost);
 
 	// Move inputs to the host
-	ndarray* h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray *h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
 
 	int things_to_process = h_outputs->shape[1];
 	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process;
 	int blocks = things_to_process / threads + 1;
 
-	layer_dense_feedforward_gpu << <blocks, threads >> > (
+	layer_dense_feedforward_gpu<<<blocks, threads>>>(
 		input_layer->outputs, dense_layer->outputs, dense_layer->weights, blocks, threads);
 	if (cudaGetLastError() != cudaSuccess) {
 		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));

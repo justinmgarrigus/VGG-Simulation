@@ -51,7 +51,7 @@ network* network_create(char* data_file, char* label_file) {
 		exit(1); 
 	}
 	
-	network* net = malloc(sizeof(net));
+	network *net = malloc(sizeof(net));
 	net->layer_count = file_read_int(file, buffer);
 	net->layers = malloc(sizeof(layer*) * net->layer_count);
 	
@@ -134,9 +134,6 @@ network* network_create(char* data_file, char* label_file) {
 }
 
 void network_feedforward(network* network, ndarray* inputs) {
-#ifdef DRAW_PROGRESS
-	network_operation_time = 0; 
-#endif
 	network->layers[0]->outputs = ndarray_copy(inputs, cudaMemcpyHostToDevice); 
 	
 	// Feed the values forward. 
@@ -147,8 +144,8 @@ void network_feedforward(network* network, ndarray* inputs) {
 
 void network_decode_output(network* network) {
 	const int NUM_SCORES = 5; 
-	ND_TYPE scores[6] = { 0 }; // length = NUM_SCORES + 1 
-	char* labels[6] = { 0 };
+	ND_TYPE scores[6] = { 0 };
+	char *labels[6] = { 0 };
  	
 	ndarray *output = ndarray_copy(network->layers[network->layer_count-1]->outputs, cudaMemcpyDeviceToHost); 
 	for (int label_index = 0; label_index < 1000 /* TODO */; label_index++) {

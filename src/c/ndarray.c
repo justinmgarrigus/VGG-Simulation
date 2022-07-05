@@ -82,7 +82,7 @@ ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
 }
 
 ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad) {
-	ndarray* copied_base = ndarray_copy(base, cudaMemcpyDeviceToHost); 
+	ndarray *copied_base = ndarray_copy(base, cudaMemcpyDeviceToHost); 
 	ndarray *padded_nd = ndarray_pad(copied_base, shape_pad); 
 	
 	int *d_shape; cudaMalloc(&d_shape, sizeof(int) * padded_nd->dim); 
