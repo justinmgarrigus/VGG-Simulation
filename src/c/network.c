@@ -7,10 +7,10 @@
 #include "ndarray.h"
 #include "json.h"
 
-uint32_t file_read_int(FILE* file, unsigned char* buffer) {
+int32_t file_read_int(FILE* file, unsigned char* buffer) {
 	// Data is encoded in .nn files as 32-bit integers, but they can be saved as 16-bit
 	// ints internally inside the network struct if the system architecture wants. 
-	fread(buffer, sizeof(uint32_t), 1, file);
+	fread(buffer, sizeof(int32_t), 1, file);
 	return buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]; 
 }
 
@@ -136,30 +136,21 @@ network* network_create(char* data_file, char* label_file) {
 void network_feedforward(network* network, ndarray* inputs) {
 #ifdef DRAW_PROGRESS
 	network_operation_time = 0; 
-#endif 
-	
-	// First layer is the input layer; copy inputs over. 
-	int *counter = malloc(sizeof(int) * inputs->dim); 
-	for (int c = 0; c < inputs->dim; c++) 
-		counter[c] = 0; 
-	do {
-		ndarray_set_val_list(network->layers[0]->outputs, counter, ndarray_get_val_list(inputs, counter)); 
-	}
-	while (ndarray_decimal_count(inputs->dim, counter, inputs->shape)); 
-	free(counter); 
+#endif
+	network->layers[0]->outputs = ndarray_copy(inputs, cudaMemcpyHostToDevice); 
 	
 	// Feed the values forward. 
 	for (int i = 1; i < network->layer_count; i++) {
-		network->layers[i]->feed(network->layers[i-1], network->layers[i]); 
+		network->layers[i]->feed(network->layers[i-1], network->layers[i]);
 	}
 }
 
 void network_decode_output(network* network) {
 	const int NUM_SCORES = 5; 
 	ND_TYPE scores[6] = { 0 }; // length = NUM_SCORES + 1 
-	char *labels[6]; 
+	char* labels[6] = { 0 };
  	
-	ndarray *output = network->layers[network->layer_count-1]->outputs; 
+	ndarray *output = ndarray_copy(network->layers[network->layer_count-1]->outputs, cudaMemcpyDeviceToHost); 
 	for (int label_index = 0; label_index < 1000 /* TODO */; label_index++) {
 		ND_TYPE value = ndarray_get_val_param(output, 0, label_index); 
 		scores[0] = value; 
@@ -187,10 +178,10 @@ void network_free(network* network) {
 	for (int i = 0; i < network->layer_count; i++) 
 		layer_free(network->layers[i]);
 	free(network->layers);
-	
+
 	for (int i = 0; i < 1000 /* TODO */; i++) 
 		free(network->labels[i]); 
 	free(network->labels); 
-	
-	free(network);
+
+//	free(network); // TODO: this gives an error
 }

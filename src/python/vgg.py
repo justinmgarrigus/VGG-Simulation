@@ -64,7 +64,6 @@ for x in range(224):
 		image_input[0][y][x][2] = image_input[0][y][x][0] 
 		image_input[0][y][x][0] = temp 
 
-
 def relu(X):
    return np.maximum(0,X)
 
@@ -137,8 +136,6 @@ def conv_2D(layer, inputs):
 	max_items = outputs.shape[1] * outputs.shape[2] * outputs.shape[3]
 	print(str(counter) + '/' + str(max_items), 'items replaced (' + str(round(counter / max_items * 100, 1)) + '%)')  
 	
-	ndarray_log(outputnp)
-	
 	# Replace with required data type 
 	eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)
 	return eager_tensor
@@ -170,8 +167,6 @@ def flatten(layer, inputs):
 		result_array[0][i] = x
 		i += 1
 	eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
-	print(result_array.shape, result_array)
-	sys.exit(1) 
 	return eager_tensor 
 	
 	
@@ -205,7 +200,7 @@ def dense(layer, inputs):
 
 if __name__ == '__main__': 
 	# Feedforward
-	x = model.layers[0](image_input) # Setting inputs 
+	x = model.layers[0](image_input) # Setting inputs
 	for layer in model.layers[1:]:   # Feed forward each layer 
 		name = layer.__class__.__name__
 		if name == 'Conv2D':         x = conv_2D(layer, x)
@@ -214,7 +209,7 @@ if __name__ == '__main__':
 		elif name == 'Dense':        x = dense(layer, x)
 		else: 
 			print('Unrecognized layer:', name)
-			sys.exit(0) 
+			sys.exit(0)  
 	  
 	# Displays output layer
 	print('Predictions:') 

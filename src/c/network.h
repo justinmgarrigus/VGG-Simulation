@@ -1,7 +1,7 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include "layer.h" 
+#include "layer.cuh" 
 
 typedef struct network {
 	int layer_count; 

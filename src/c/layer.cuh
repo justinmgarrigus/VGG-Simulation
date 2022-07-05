@@ -1,6 +1,7 @@
 #ifndef LAYER_H
 #define LAYER_H 
 
+#include "cuda_runtime.h" 
 #include "ndarray.h" 
 
 typedef struct layer layer; 
@@ -35,8 +36,10 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer);
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer); 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer); 
 
-ND_TYPE layer_relu(ND_TYPE* value); 
-ND_TYPE layer_softmax(ND_TYPE* value); 
+__device__ ND_TYPE layer_relu(ND_TYPE* value); 
+__device__ ND_TYPE layer_softmax(ND_TYPE* value); 
+
+void layer_log(layer* layer, int index); 
 
 #ifdef DRAW_PROGRESS 
 double network_operation_time; 

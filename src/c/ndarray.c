@@ -7,16 +7,16 @@
 #include "ndarray.h" 
 
 ndarray* ndarray_create(int dim, int* shape) {
-	int *cumulative = malloc(sizeof(int) * dim); 
+	int *cumulative = (int*)malloc(sizeof(int) * dim); 
 	cumulative[dim-1] = 1; 
 	for (int i = dim-2; i >= 0; i--) 
 		cumulative[i] = cumulative[i+1] * shape[i+1]; 
 	int count = cumulative[0] * shape[0]; 
-	ND_TYPE *arr = malloc(sizeof(ND_TYPE) * count); 
+	ND_TYPE *arr = (ND_TYPE*)malloc(sizeof(ND_TYPE) * count); 
 	
-	ndarray *nd = malloc(sizeof(ndarray)); 
+	ndarray *nd = (ndarray*)malloc(sizeof(ndarray)); 
 	nd->dim = dim; 
-	nd->shape = malloc(sizeof(int) * dim); 
+	nd->shape = (int*)malloc(sizeof(int) * dim); 
 	memcpy(nd->shape, shape, sizeof(int) * dim); 
 	nd->cumulative = cumulative; 
 	nd->arr = arr; 
@@ -24,14 +24,8 @@ ndarray* ndarray_create(int dim, int* shape) {
 	return nd; 
 }
 
-	int dim; 
-	int *shape; 
-	int count; 
-	int *cumulative; 
-	ND_TYPE *arr; 
-
 ndarray* ndarray_create_gpu(int dim, int* shape) {
-	int *cumulative = malloc(sizeof(int) * dim); 
+	int *cumulative = (int*)malloc(sizeof(int) * dim); 
 	cumulative[dim-1] = 1; 
 	for (int i = dim-2; i >= 0; i--) 
 		cumulative[i] = cumulative[i+1] * shape[i+1]; 
@@ -45,7 +39,7 @@ ndarray* ndarray_create_gpu(int dim, int* shape) {
 	int *d_shape; cudaMalloc(&d_shape, sizeof(int) * dim); 
 	cudaMemcpy(d_shape, shape, sizeof(int) * dim, cudaMemcpyHostToDevice); 
 
-	ndarray *nd = malloc(sizeof(ndarray)); 
+	ndarray *nd = (ndarray*)malloc(sizeof(ndarray)); 
 	nd->dim = dim; 
 	nd->shape = d_shape; 
 	nd->cumulative = d_cumulative; 
@@ -60,16 +54,20 @@ ndarray* ndarray_create_gpu(int dim, int* shape) {
 }
 
 ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
-	int *new_shape = malloc(sizeof(int) * base->dim); 
+	int *new_shape = (int*)malloc(sizeof(int) * base->dim); 
 	for (int i = 0; i < base->dim; i++) 
 		new_shape[i] = base->shape[i] + 2 * shape_pad[i]; 
 	ndarray *new_arr = ndarray_create(base->dim, new_shape);
 	
-	int *pos = malloc(sizeof(int) * base->dim);
+	int *pos = (int*)malloc(sizeof(int) * base->dim);
 	for (int i = 0; i < base->dim; i++) 
 		pos[i] = 0;
-	int *actual = malloc(sizeof(int) * base->dim); 
+	int *actual = (int*)malloc(sizeof(int) * base->dim); 
 	
+	// TODO make this better 
+	for (int i = 0; i < new_arr->count; i++)
+		new_arr->arr[i] = 0; 
+
 	do {
 		for (int i = 0; i < base->dim; i++) 
 			actual[i] = pos[i] + shape_pad[i];
@@ -84,7 +82,8 @@ ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
 }
 
 ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad) {
-	ndarray *padded_nd = ndarray_pad(base, shape_pad); 
+	ndarray* copied_base = ndarray_copy(base, cudaMemcpyDeviceToHost); 
+	ndarray *padded_nd = ndarray_pad(copied_base, shape_pad); 
 	
 	int *d_shape; cudaMalloc(&d_shape, sizeof(int) * padded_nd->dim); 
 	cudaMemcpy(d_shape, padded_nd->shape, sizeof(int) * padded_nd->dim, cudaMemcpyHostToDevice); 
@@ -95,7 +94,7 @@ ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad) {
 	ND_TYPE *d_arr; cudaMalloc(&d_arr, sizeof(ND_TYPE) * padded_nd->count); 
 	cudaMemcpy(d_arr, padded_nd->arr, sizeof(ND_TYPE) * padded_nd->count, cudaMemcpyHostToDevice);
 
-	ndarray *padded = malloc(sizeof(ndarray)); 
+	ndarray *padded = (ndarray*)malloc(sizeof(ndarray)); 
 	padded->dim = padded_nd->dim; 
 	padded->shape = d_shape; 
 	padded->count = padded_nd->count; 
@@ -105,6 +104,7 @@ ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad) {
 	ndarray *d_padded; cudaMalloc(&d_padded, sizeof(ndarray)); 
 	cudaMemcpy(d_padded, padded, sizeof(ndarray), cudaMemcpyHostToDevice); 
 	
+	ndarray_free(copied_base); 
 	ndarray_free(padded_nd); 
 	free(padded); 
 	return d_padded; 
@@ -118,31 +118,35 @@ void ndarray_free(ndarray* nd) {
 }
 
 void ndarray_free_gpu(ndarray* nd) {
-	cudaFree(nd->arr); 
-	cudaFree(nd->shape); 
-	cudaFree(nd->cumulative); 
+	ndarray *host_nd = malloc(sizeof(ndarray));
+	cudaMemcpy(host_nd, nd, sizeof(ndarray), cudaMemcpyDeviceToHost); 
+
+	cudaFree(host_nd->arr); 
+	cudaFree(host_nd->shape); 
+	cudaFree(host_nd->cumulative);
 	cudaFree(nd); 
+	free(host_nd); 
 }
 
 ndarray* ndarray_copy(ndarray* base, enum cudaMemcpyKind kind) {
 	ndarray *new_nd; 
 	if (kind == cudaMemcpyDeviceToHost) {
-		ndarray *nd = malloc(sizeof(ndarray)); 
+		ndarray *nd = (ndarray*)malloc(sizeof(ndarray)); 
 		cudaMemcpy(nd, base, sizeof(ndarray), kind); 
 		
-		new_nd = malloc(sizeof(ndarray)); 
+		new_nd = (ndarray*)malloc(sizeof(ndarray)); 
 		new_nd->dim = nd->dim; 
-		new_nd->shape = malloc(sizeof(int) * new_nd->dim); 
+		new_nd->shape = (int*)malloc(sizeof(int) * new_nd->dim); 
 		cudaMemcpy(new_nd->shape, nd->shape, sizeof(int) * new_nd->dim, kind); 
 		new_nd->count = nd->count; 
-		new_nd->cumulative = malloc(sizeof(int) * new_nd->dim); 
+		new_nd->cumulative = (int*)malloc(sizeof(int) * new_nd->dim); 
 		cudaMemcpy(new_nd->cumulative, nd->cumulative, sizeof(int) * new_nd->dim, kind); 
-		new_nd->arr = malloc(sizeof(ND_TYPE) * new_nd->count); 
+		new_nd->arr = (ND_TYPE*)malloc(sizeof(ND_TYPE) * new_nd->count); 
 		cudaMemcpy(new_nd->arr, nd->arr, sizeof(ND_TYPE) * new_nd->count, kind);
 		free(nd); 
 	}
 	else if (kind == cudaMemcpyHostToDevice) {
-		ndarray *nd = malloc(sizeof(ndarray));
+		ndarray *nd = (ndarray*)malloc(sizeof(ndarray));
 		nd->dim = base->dim; 
 		cudaMalloc(&(nd->shape), sizeof(int) * base->dim); 
 		cudaMemcpy(nd->shape, base->shape, sizeof(int) * base->dim, kind); 
@@ -171,7 +175,7 @@ ND_TYPE ndarray_get_val_param(ndarray* nd, ...) {
 	va_list valist; 
 	va_start(valist, nd); 
 	
-	int *pos = malloc(sizeof(int) * nd->dim);
+	int *pos = (int*)malloc(sizeof(int) * nd->dim);
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = va_arg(valist, int); 
 	
@@ -192,7 +196,7 @@ void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...) {
 	va_list valist; 
 	va_start(valist, value); 
 	
-	int *pos = malloc(sizeof(int) * nd->dim); 
+	int *pos = (int*)malloc(sizeof(int) * nd->dim); 
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = va_arg(valist, int); 
 	
@@ -202,7 +206,7 @@ void ndarray_set_val_param(ndarray* nd, ND_TYPE value, ...) {
 }
 
 void ndarray_deep_display(ndarray* nd) {
-	int *pos = malloc(sizeof(int) * nd->dim);
+	int *pos = (int*)malloc(sizeof(int) * nd->dim);
 	for (int i = 0; i < nd->dim; i++) 
 		pos[i] = 0;
 	
