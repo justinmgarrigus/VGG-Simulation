@@ -53,11 +53,17 @@ ndarray* ndarray_create_gpu(int dim, int* shape) {
 	return d_nd; 
 }
 
-ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
+ndarray* ndarray_pad(ndarray* base, int* shape_pad, int alignment) {
 	int *new_shape = (int*)malloc(sizeof(int) * base->dim); 
 	for (int i = 0; i < base->dim; i++) 
 		new_shape[i] = base->shape[i] + 2 * shape_pad[i]; 
 	ndarray *new_arr = ndarray_create(base->dim, new_shape);
+	
+	if (new_arr->count % alignment != 0) {
+		int temp = new_arr->count; 
+		new_arr->count = (new_arr->count / alignment + 1) * alignment;
+		new_arr->arr = realloc(new_arr->arr, sizeof(ND_TYPE) * new_arr->count);
+	}
 	
 	int *pos = (int*)malloc(sizeof(int) * base->dim);
 	for (int i = 0; i < base->dim; i++) 
@@ -83,7 +89,7 @@ ndarray* ndarray_pad(ndarray* base, int* shape_pad) {
 
 ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad) {
 	ndarray *copied_base = ndarray_copy(base, cudaMemcpyDeviceToHost); 
-	ndarray *padded_nd = ndarray_pad(copied_base, shape_pad); 
+	ndarray *padded_nd = ndarray_pad(copied_base, shape_pad, 1); 
 	
 	int *d_shape; cudaMalloc(&d_shape, sizeof(int) * padded_nd->dim); 
 	cudaMemcpy(d_shape, padded_nd->shape, sizeof(int) * padded_nd->dim, cudaMemcpyHostToDevice); 

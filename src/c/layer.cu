@@ -106,60 +106,57 @@ __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* ou
 	int y_dim = outputs->shape[2]; 
 	int filter_count = outputs->shape[3];
 	int index = blockIdx.x * threads + threadIdx.x;
-	int filter = index / (x_dim * y_dim);
+	int filter = min(index / (x_dim * y_dim), kernel->shape[3] - 1);
 	int dim = index % (x_dim * y_dim);
 	int x = dim % x_dim;
 	int y = dim / x_dim;
 
-	if (filter < kernel->shape[3]) {
-		ND_TYPE result = bias->arr[filter];
-		for (int kernel_x = 0; kernel_x < kernel->shape[0]; kernel_x++) {
-			for (int kernel_y = 0; kernel_y < kernel->shape[1]; kernel_y++) {
-				for (int channel = 0; channel < inputs->shape[3]; channel++) {
-					int kernel_index[4] = { kernel_x, kernel_y, channel, filter };
-					int inputs_index[4] = { 0, x + kernel_x, y + kernel_y, channel };
-					result +=
-						kernel->arr[ndarray_index(kernel, kernel_index)] *
-						inputs->arr[ndarray_index(inputs, inputs_index)];
-				}
+	ND_TYPE result = bias->arr[filter];
+	for (int kernel_x = 0; kernel_x < kernel->shape[0]; kernel_x++) {
+		for (int kernel_y = 0; kernel_y < kernel->shape[1]; kernel_y++) {
+			for (int channel = 0; channel < inputs->shape[3]; channel++) {
+				int kernel_index[4] = { kernel_x, kernel_y, channel, filter };
+				int inputs_index[4] = { 0, x + kernel_x, y + kernel_y, channel };
+				result +=
+					kernel->arr[ndarray_index(kernel, kernel_index)] *
+					inputs->arr[ndarray_index(inputs, inputs_index)];
 			}
 		}
-		result = fmaxf(0, result); // TODO should be activation function instead
-
-		int outputs_index[4] = { 0, x, y, filter };
-		outputs->arr[ndarray_index(outputs, outputs_index)] = result;
 	}
+	result = fmaxf(0, result); // TODO should be activation function instead
+
+	int outputs_index[4] = { 0, x, y, filter };
+	outputs->arr[ndarray_index(outputs, outputs_index)] = result;
 }
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
-	printf("--Conv2D\n"); 
-
 	// Max thread count 
 	cudaDeviceProp prop; 
 	cudaGetDeviceProperties(&prop, 0); 
 	int max_threads_per_block = prop.maxThreadsPerBlock; 
-
+	
 	// Move outputs to the host
 	ndarray *h_outputs = ndarray_copy(conv_layer->outputs, cudaMemcpyDeviceToHost);
+	
+	int x_dim = h_outputs->shape[1];
+	int y_dim = h_outputs->shape[2];
+	int filters = h_outputs->shape[3];
+
+	int things_to_process = x_dim * y_dim * filters;
+	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process; 
+	int blocks = things_to_process / threads + 1; 
 	
 	// Move inputs to the host
 	ndarray *h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
 
 	// Pad input array
 	int padding[4] = {0, 1, 1, 0};
-	ndarray *h_inputs_padded = ndarray_pad(h_inputs, padding);
+	ndarray *h_inputs_padded = ndarray_pad(h_inputs, padding, threads * blocks - things_to_process);
 
 	// Move back to the device
 	ndarray *d_inputs = ndarray_copy(h_inputs_padded, cudaMemcpyHostToDevice);
-
-	int x_dim = h_outputs->shape[1];
-	int y_dim = h_outputs->shape[2];
-	int filters = h_outputs->shape[3];
-
-	int things_to_process = x_dim * y_dim * filters; 
-	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process; 
-	int blocks = things_to_process / threads + 1; 
-
+	
+	printf("--Conv2D (%d, %d)\n", blocks, threads); 
 	layer_convolutional_feedforward_gpu<<<blocks, threads>>>(
 		d_inputs, conv_layer->outputs, conv_layer->weights, blocks, threads); 
 	if (cudaGetLastError() != cudaSuccess) {

@@ -16,8 +16,7 @@ typedef struct ndarray {
 
 ndarray* ndarray_create(int count, int* shape);
 ndarray* ndarray_create_gpu(int count, int* shape); 
-ndarray* ndarray_pad(ndarray* base, int* shape_pad); 
-ndarray* ndarray_pad_gpu(ndarray* base, int* shape_pad); 
+ndarray* ndarray_pad(ndarray* base, int* shape_pad, int alignment);
 void ndarray_free(ndarray* nd);
 void ndarray_free_gpu(ndarray* nd); 
 ndarray* ndarray_copy(ndarray* base, enum cudaMemcpyKind kind); 
