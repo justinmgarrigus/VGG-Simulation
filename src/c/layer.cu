@@ -103,8 +103,7 @@ __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* ou
 	ndarray* bias = weights[1];
 
 	int x_dim = outputs->shape[1];
-	int y_dim = outputs->shape[2]; 
-	int filter_count = outputs->shape[3];
+	int y_dim = outputs->shape[2];
 	int index = blockIdx.x * threads + threadIdx.x;
 	int filter = min(index / (x_dim * y_dim), kernel->shape[3] - 1);
 	int dim = index % (x_dim * y_dim);

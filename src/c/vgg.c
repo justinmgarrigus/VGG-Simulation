@@ -46,6 +46,14 @@ int main(int argc, char** argv) {
 		exit(1); 
 	}
 	
+	int device_count = 0; 
+	int device_error = cudaGetDeviceCount(&device_count); 
+	printf("Device count: %d\n", device_count); 
+	if (device_count == 0 || device_error != cudaSuccess) {
+		printf("No devices are connected: %s(%d)\n", cudaGetErrorName(device_error), device_error); 
+		exit(1); 
+	}
+	
 	network *network = network_create(argv[1], argv[2]);
 	
 	int length[4] = { 1, 224, 224, 3 };
