@@ -6,6 +6,8 @@
 
 typedef struct layer layer; 
 
+int dense_counter; 
+
 enum layer_type {
 	layer_type_none = 0, 
 	layer_type_convolutional = 1, 

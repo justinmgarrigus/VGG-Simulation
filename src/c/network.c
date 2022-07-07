@@ -135,6 +135,7 @@ network* network_create(char* data_file, char* label_file) {
 }
 
 void network_feedforward(network* network, ndarray* inputs) {
+	dense_counter = 0; // TODO replace with function pointers.
 	printf("Feedforward:\n"); 
 	network->layers[0]->outputs = ndarray_copy(inputs, cudaMemcpyHostToDevice); 
 	

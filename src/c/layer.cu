@@ -247,7 +247,6 @@ __global__ void layer_dense_gpu_relu(ndarray* dense) {
 		dense->arr[i] = fmaxf(dense->arr[i], 0); 
 }
 
-int dense_counter = 0; // TODO remove, replace with function pointer. 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { 
 	printf("--Dense\n"); 
 	

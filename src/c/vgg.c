@@ -41,8 +41,8 @@ void vgg_image(char* file_name, ndarray* input) {
 }
 
 int main(int argc, char** argv) {
-	if (argc != 4) {
-		printf("Format: ./vgg <network.nn> <labels.json> <image.img>\n"); 
+	if (argc < 3 || argc > 4) {
+		printf("Format: ./vgg <network.nn> <labels.json> [<image.img>]\n"); 
 		exit(1); 
 	}
 	
@@ -58,10 +58,36 @@ int main(int argc, char** argv) {
 	
 	int length[4] = { 1, 224, 224, 3 };
 	ndarray *input = ndarray_create(4, length); 
-	vgg_image(argv[3], input); 
 	
-	network_feedforward(network, input); printf("\n");
-	network_decode_output(network); 
+	if (argc == 4) {
+		vgg_image(argv[3], input); 
+	
+		network_feedforward(network, input); printf("\n");
+		network_decode_output(network); 
+	}
+	else {
+		printf("\n\n"); 
+		while (1) {
+			char file_name[256]; 
+			printf("Enter a file name or 'quit': "); 
+			scanf("%s", file_name); 
+			
+			if (strcmp(file_name, "quit") == 0) 
+				break; 
+			
+			char buffer[256]; 
+			strcpy(buffer, "data/"); 
+			strcat(buffer, file_name); 
+			
+#if defined(_MSC_VER)
+			strcat(buffer, ".ppm"); 
+#endif
+			
+			vgg_image(buffer, input); 
+			network_feedforward(network, input); printf("\n"); 
+			network_decode_output(network); printf("\n\n"); 
+		}
+	}
 	
 	network_free(network); 
 }

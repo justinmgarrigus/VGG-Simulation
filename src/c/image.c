@@ -126,7 +126,7 @@ image* image_load(char* full_file_name) {
 	}
 	else if (strcmp(exten, "ppm") == 0) {
 		image_display(name); 
-	
+		
 		FILE *file = fopen(full_file_name, "rb"); 
 		img = parse_ppm(file);
 		fclose(file); 
