@@ -269,7 +269,7 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 			break; 
 			
 		default: 
-			fprintf("Error: unrecognized activation function: %d\n", dense_layer->activation); 
+			fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation); 
 			exit(1); 
 	}
 	if (cudaGetLastError() != cudaSuccess) {
