@@ -1,6 +1,7 @@
 # (1) Importing dependency
 import imp
 from operator import le
+import sys
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, Flatten,\
@@ -58,11 +59,11 @@ def save_network(model, network_file_name):
 			layer_type = 6
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
 			print("Layer type", layer_type)
-			if ('relu' in str(layer.name)):
+			if ('relu' in str(layer.activation)):
 				type_of_activation = 1
 				file.write(type_of_activation.to_bytes(4, byteorder='big', signed=True))
 				print("Type of activation", type_of_activation)
-			elif ('softmax' in str(layer.name)):
+			elif ('softmax' in str(layer.activation)):
 				type_of_activation = 2
 				file.write(type_of_activation.to_bytes(4, byteorder='big', signed=True))
 				print("Type of activation", type_of_activation)
@@ -128,6 +129,11 @@ def load_network(model):
 			for i in range(number_of_data_stored_in_shape):
 				ba = file.read(4)
 				ba = struct.unpack("f", ba)[0]
+		length_of_output_shape = int.from_bytes(file.read(4), byteorder='big', signed=True)
+		print("Length of output shape:", length_of_output_shape)
+		for output_shape_index in range(length_of_output_shape):
+			dim = int.from_bytes(file.read(4), byteorder='big', signed=True)
+			print("Dim:", dim)
 	file.close()
 
 
@@ -246,12 +252,13 @@ im = im / 255
 im = np.expand_dims(im, axis=0)
 pred = model.predict(im)
 '''
+'''
 print("Saving network:")
 save_network(model, "alexnet.nn")
 '''
 print("Load network:")
 load_network(model)
-'''
+
 ''
 labels = open('/Users/bora/Desktop/cifar10_labels.json')
 labels = json.load(labels)
