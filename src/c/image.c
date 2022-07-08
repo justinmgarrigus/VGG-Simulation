@@ -63,6 +63,30 @@ image* parse_ppm(FILE* file) {
 	return img; 
 }
 
+void image_display(char *name) {
+#if defined(_MSC_VER)
+	char *jpg_name = malloc(strlen(name) + 5);
+	strcpy(jpg_name, name); 
+	strcat(jpg_name, ".jpg");
+	FILE *jpg_alternative = fopen(jpg_name, "r"); 
+	if (jpg_alternative != NULL) {
+		fclose(jpg_alternative); 
+		
+		char *raw_name = strrchr(jpg_name, '/'); 
+		char *path = malloc(raw_name - jpg_name + 1);
+		strncpy(path, jpg_name, raw_name - jpg_name); 
+		path[raw_name - jpg_name] = '\0'; 
+		
+		char buffer[256]; 
+		sprintf(buffer, "cd %s && %s", path, raw_name + 1); 
+		system(buffer); 
+		
+		free(path); 			
+	}
+	free(jpg_name); 
+#endif
+}
+
 image* image_load(char* full_file_name) {
 	// Check if a ppm file already exists in this format in the data directory. 
 	ptrdiff_t full_len = strlen(full_file_name);
@@ -101,6 +125,8 @@ image* image_load(char* full_file_name) {
 #endif 
 	}
 	else if (strcmp(exten, "ppm") == 0) {
+		image_display(name); 
+		
 		FILE *file = fopen(full_file_name, "rb"); 
 		img = parse_ppm(file);
 		fclose(file); 

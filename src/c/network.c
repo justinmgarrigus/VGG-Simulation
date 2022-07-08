@@ -72,16 +72,9 @@ network* network_create(char* data_file, char* label_file) {
 			for (int dimension = 0; dimension < dimensions; dimension++)
 				shape[dimension] = file_read_int(file, buffer); 
 			
-			int *counter = malloc(sizeof(int) * dimensions); 
-			for (int c = 0; c < dimensions; c++) 
-				counter[c] = 0; 
-			
 			ndarray *weights = ndarray_create(dimensions, shape);
-			do {
-				ndarray_set_val_list(weights, counter, file_read_float(file, buffer)); 
-			}
-			while (ndarray_decimal_count(dimensions, counter, shape)); 
-			free(counter); 
+			for (int i = 0; i < weights->count; i++)
+				weights->arr[i] = file_read_float(file, buffer); 
 			
 			weight_set[set_index] = weights; 
 		}
@@ -135,6 +128,7 @@ network* network_create(char* data_file, char* label_file) {
 }
 
 void network_feedforward(network* network, ndarray* inputs) {
+	dense_counter = 0; // TODO replace with function pointers.
 	printf("Feedforward:\n"); 
 	network->layers[0]->outputs = ndarray_copy(inputs, cudaMemcpyHostToDevice); 
 	

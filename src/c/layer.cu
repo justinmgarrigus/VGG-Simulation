@@ -49,22 +49,7 @@ layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type typ
 			exit(-1); 
 	}
 	
-	switch (activation) {
-		case layer_activation_none: 
-			break; 
-		
-		case layer_activation_relu: 
-			lr->activation = layer_relu; 
-			break; 
-			
-		case layer_activation_softmax: 
-			lr->activation = layer_softmax; 
-			break; 
-			
-		default: 
-			fprintf(stderr, "Unknown activation type specified: %d\n", activation); 
-			exit(-1); 
-	}
+	lr->activation = activation; 
 	
 	return lr; 
 }
@@ -122,6 +107,7 @@ __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* ou
 			}
 		}
 	}
+	
 	result = fmaxf(0, result); // TODO should be activation function instead
 
 	int outputs_index[4] = { 0, x, y, filter };
@@ -247,7 +233,6 @@ __global__ void layer_dense_gpu_relu(ndarray* dense) {
 		dense->arr[i] = fmaxf(dense->arr[i], 0); 
 }
 
-int dense_counter = 0; // TODO remove, replace with function pointer. 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer) { 
 	printf("--Dense\n"); 
 	
@@ -273,12 +258,20 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 		exit(1);
 	}
 	cudaDeviceSynchronize();
-
-	dense_counter++; 
-	if (dense_counter < 3)
-		layer_dense_gpu_relu<<<1,1>>>(dense_layer->outputs); 
-	else 
-		layer_dense_gpu_divsum<<<1,1>>>(dense_layer->outputs); 
+	
+	switch (dense_layer->activation) {
+		case layer_activation_relu: 
+			layer_dense_gpu_relu<<<1,1>>>(dense_layer->outputs); 
+			break; 
+		
+		case layer_activation_softmax: 
+			layer_dense_gpu_divsum<<<1,1>>>(dense_layer->outputs); 
+			break; 
+			
+		default: 
+			fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation); 
+			exit(1); 
+	}
 	if (cudaGetLastError() != cudaSuccess) {
 		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
 		exit(1);
@@ -288,6 +281,17 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 	ndarray_free(h_outputs);
 	ndarray_free(h_inputs);
 }
+
+__device__ ND_TYPE layer_activation(ND_TYPE* value, enum layer_activation activation) {
+	switch (activation) {
+		case layer_activation_relu:
+			return layer_relu(value); 
+		case layer_activation_softmax: 
+			return layer_softmax(value); 
+		default: 
+			return 0; 
+	}
+} 
 
 __device__ ND_TYPE layer_relu(ND_TYPE* value) { 
 	return fmaxf(*value, 0);

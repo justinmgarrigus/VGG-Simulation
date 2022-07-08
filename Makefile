@@ -31,7 +31,7 @@ libjpeg:
 	./configure ; \
 	$(MAKE) ; \
 	$(MAKE) test ; \
-	sudo make install			
+	sudo make install
 
 c: pre-build
 	nvcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS)
