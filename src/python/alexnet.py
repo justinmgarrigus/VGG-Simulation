@@ -1,87 +1,60 @@
 # (1) Importing dependency
-from base64 import decode
-import imp
-from operator import le
 import sys
 import keras
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout, Flatten,\
- Conv2D, MaxPooling2D, Resizing
-from keras.layers import BatchNormalization
 import numpy as np
 import tensorflow as tf
 import struct
 from PIL import Image
-import json
-import tensorflow_datasets as tfds
-import matplotlib.pyplot as plt
-import scipy.io as sio
-import cv2
 import random
+import math 
 
 np.random.seed(1000)
 
 def save_network(model, network_file_name):
+	print('Saving network to:', network_file_name) 
 	file = open(network_file_name, "wb")
 	magic_number = 1234
 	file.write(magic_number.to_bytes(4, byteorder='big', signed=True))
-	print("Magic number", magic_number)
 	number_of_layers = len(model.layers)
-	print("Number of layers", number_of_layers)
 	file.write(number_of_layers.to_bytes(4, byteorder='big', signed=True))
 	for layer in model.layers:
-		print("Saving layer:", str(layer.name))
 		if ('resizing' in str(layer.name)):
 			layer_type = 0
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		elif ('conv' in str(layer.name)):
 			layer_type = 1
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		elif ('pool' in str(layer.name)):
 			layer_type = 2
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		elif ('flatten' in str(layer.name)):
 			layer_type = 3
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		elif ('dense' in str(layer.name)):
 			layer_type = 4
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		elif ('batch' in str(layer.name)):
 			layer_type = 5
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		elif ('activation' in str(layer.name)):
 			layer_type = 6
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 			if ('relu' in str(layer.activation)):
 				type_of_activation = 1
 				file.write(type_of_activation.to_bytes(4, byteorder='big', signed=True))
-				print("Type of activation", type_of_activation)
 			elif ('softmax' in str(layer.activation)):
 				type_of_activation = 2
 				file.write(type_of_activation.to_bytes(4, byteorder='big', signed=True))
-				print("Type of activation", type_of_activation)
 		elif ('dropout' in str(layer.name)):
 			layer_type = 7
 			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			print("Layer type", layer_type)
 		number_of_weight_indices = len(layer.get_weights())
-		print("Number of weight indices", number_of_weight_indices)
 		file.write(number_of_weight_indices.to_bytes(4, byteorder='big', signed=True))
 		for weight_index in range(len(layer.get_weights())):
 			weightsnumpy = layer.get_weights()[weight_index]
-			#print("Weightsnumpy", weightsnumpy)
 			length_of_weights_shape = len(weightsnumpy.shape)
-			print("Length of weights shape:", length_of_weights_shape)
 			file.write(length_of_weights_shape.to_bytes(4, byteorder='big', signed=True))
 			for i in range(len(weightsnumpy.shape)):
-				print("Shape", weightsnumpy.shape[i])
 				file.write(weightsnumpy.shape[i].to_bytes(4, byteorder='big', signed=True))
 			flattened_weights = weightsnumpy.flatten()
 			for i in range(len(flattened_weights)):
@@ -91,33 +64,29 @@ def save_network(model, network_file_name):
 		output_shape = layer.output_shape if type(layer.output_shape) is tuple else layer.output_shape[0]
 		output_shape = list(output_shape)
 		output_shape[0] = 1 # replace None value
-		print("Output shape:", output_shape)
-		print("Length of output shape:", len(output_shape))
 		file.write(len(output_shape).to_bytes(4, byteorder='big', signed=True))
 		for dim in output_shape:
 			file.write(int(dim).to_bytes(4, byteorder='big', signed=True))
-			print("Dim", dim)
 	file.close()
 	print("Network saved to", network_file_name)
 
-def load_network(model):
-	file = open("alexnet.nn", "rb")
+
+def load_network(model, file_name='data/alexnet.nn'):
+	print('Loading network from:', file_name) 
+	file = open(file_name, "rb")
 	magic_number = int.from_bytes(file.read(4), byteorder='big', signed=True)
-	#print("Magic number", magic_number)
+	if magic_number != 1234:
+		print('Error: magic number in file', file_name, 'not 1234! Read:', magic_number) 
+		sys.exit(1) 
 	number_of_layers = int.from_bytes(file.read(4), byteorder='big', signed=True)
-	#print("Number of layers:", number_of_layers)
 	for layer_index in range(number_of_layers):
-		#print("Layer index", layer_index)
 		layer_type = int.from_bytes(file.read(4), byteorder='big', signed=True)
-		#print("Layer type", layer_type)
 		if (layer_type == 6):
-			type_of_activation = int.from_bytes(file.read(4), byteorder='big', signed=True)
+			file.read(4) # type of activation
 		number_of_weight_indices = int.from_bytes(file.read(4), byteorder='big', signed=True)
-		#print("Number of weight indices", number_of_weight_indices) #weights and biases
 		nd_list = []
 		for weight_index in range(number_of_weight_indices):
 			length_of_weights_shape = int.from_bytes(file.read(4), byteorder='big', signed=True)
-			#print("Length of weights shape", length_of_weights_shape)
 			weights_shape = []
 			for shape_index in range(length_of_weights_shape):
 				shape_value = int.from_bytes(file.read(4), byteorder='big', signed=True)
@@ -125,10 +94,8 @@ def load_network(model):
 			nd_array = np.empty(shape=tuple(weights_shape))
 			nd_list.append(nd_array)
 			number_of_data_stored_in_shape = 1
-			#print("Weights shape", weights_shape)
 			for i in range(len(weights_shape)):
 				number_of_data_stored_in_shape *= weights_shape[i]
-			#print("Number of data stored in shape", number_of_data_stored_in_shape)
 			it = np.ndindex(nd_array.shape)
 			for i in range(number_of_data_stored_in_shape):
 				ba = file.read(4)
@@ -137,100 +104,92 @@ def load_network(model):
 				nd_array[index] = ba
 		model.layers[layer_index].set_weights(nd_list)
 		length_of_output_shape = int.from_bytes(file.read(4), byteorder='big', signed=True)
-		#print("Length of output shape:", length_of_output_shape)
 		for output_shape_index in range(length_of_output_shape):
-			dim = int.from_bytes(file.read(4), byteorder='big', signed=True)
-			#print("Dim:", dim)
+			file.read(4) # dim
 	file.close()
+	print("Network loaded")
+	
 
-def create_alexnet():
-	(x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
-	x_train = x_train[:1] #np.reshape(x_train, newshape=(1000, 32, 32, 3))
-	y_train = y_train[:1]
+def create_alexnet(train=False):
+	model = keras.models.Sequential([\
+	keras.layers.Conv2D(filters=96, kernel_size=(11,11), strides=(4,4), activation='relu', input_shape=(227,227,3)),\
+    keras.layers.BatchNormalization(),\
+    keras.layers.MaxPool2D(pool_size=(3,3), strides=(2,2)),\
+    keras.layers.Conv2D(filters=256, kernel_size=(5,5), strides=(1,1), activation='relu', padding="same"),\
+    keras.layers.BatchNormalization(),\
+    keras.layers.MaxPool2D(pool_size=(3,3), strides=(2,2)),\
+    keras.layers.Conv2D(filters=384, kernel_size=(3,3), strides=(1,1), activation='relu', padding="same"),\
+    keras.layers.BatchNormalization(),\
+    keras.layers.Conv2D(filters=384, kernel_size=(3,3), strides=(1,1), activation='relu', padding="same"),\
+    keras.layers.BatchNormalization(),\
+    keras.layers.Conv2D(filters=256, kernel_size=(3,3), strides=(1,1), activation='relu', padding="same"),\
+    keras.layers.BatchNormalization(),\
+    keras.layers.MaxPool2D(pool_size=(3,3), strides=(2,2)),\
+    keras.layers.Flatten(),\
+    keras.layers.Dense(4096, activation='relu'),\
+    keras.layers.Dropout(0.5),\
+    keras.layers.Dense(4096, activation='relu'),\
+    keras.layers.Dropout(0.5),\
+    keras.layers.Dense(10, activation='softmax')])
+	
+	model.compile(loss='sparse_categorical_crossentropy', optimizer=tf.optimizers.SGD(lr=0.001), metrics=['accuracy'])
+	model.summary()
+	
+	def process_images(image, label):
+		# Normalize images to have a mean of 0 and standard deviation of 1
+		image = tf.image.per_image_standardization(image)
+		# Resize images from 32x32 to 227x227
+		image = tf.image.resize(image, (227,227))
+		return image, label
+	
+	(train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.cifar10.load_data()
+	validation_images, validation_labels = train_images[:5000], train_labels[:5000]
+	train_images, train_labels = train_images[5000:], train_labels[5000:]
+	train_ds = tf.data.Dataset.from_tensor_slices((train_images, train_labels))
+	test_ds = tf.data.Dataset.from_tensor_slices((test_images, test_labels))
+	validation_ds = tf.data.Dataset.from_tensor_slices((validation_images, validation_labels))
+	train_ds_size = tf.data.experimental.cardinality(train_ds).numpy()
+	train_ds = (train_ds.map(process_images).shuffle(buffer_size=train_ds_size).batch(batch_size=32, drop_remainder=True))
+	test_ds = (test_ds.map(process_images).shuffle(buffer_size=train_ds_size).batch(batch_size=32, drop_remainder=True))
+	validation_ds = (validation_ds.map(process_images).shuffle(buffer_size=train_ds_size).batch(batch_size=32, drop_remainder=True))
+	
+	if train: 
+		model.fit(train_ds, epochs=1, validation_data=validation_ds, validation_freq=1)
+		save_network(model, 'data/alexnet.nn')
+	else: 
+		load_network(model, 'data/alexnet.nn')
 
-	model = Sequential()
-
-	# 1st Convolutional Layer
-	model.add(Resizing(224, 224, interpolation='bilinear'))
-	model.add(Conv2D(filters=96, input_shape=(224, 224, 3), kernel_size=(11,11), strides=(4,4), padding='valid'))
-	model.add(Activation('relu'))
-	# Pooling 
-	model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
-	# Batch Normalisation before passing it to the next layer
-	model.add(BatchNormalization())
-
-	# 2nd Convolutional Layer
-	model.add(Conv2D(filters=256, kernel_size=(11,11), strides=(1,1), padding='valid'))
-	model.add(Activation('relu'))
-	# Pooling
-	model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# 3rd Convolutional Layer
-	model.add(Conv2D(filters=384, kernel_size=(3,3), strides=(1,1), padding='valid'))
-	model.add(Activation('relu'))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# 4th Convolutional Layer
-	model.add(Conv2D(filters=384, kernel_size=(3,3), strides=(1,1), padding='valid'))
-	model.add(Activation('relu'))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# 5th Convolutional Layer
-	model.add(Conv2D(filters=256, kernel_size=(3,3), strides=(1,1), padding='valid'))
-	model.add(Activation('relu'))
-	# Pooling
-	model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# Passing it to a dense layer
-	model.add(Flatten())
-	# 1st Dense Layer
-	model.add(Dense(4096, input_shape=(224*224*3,)))
-	model.add(Activation('relu'))
-	# Add Dropout to prevent overfitting
-	model.add(Dropout(0.4))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# 2nd Dense Layer
-	model.add(Dense(4096))
-	model.add(Activation('relu'))
-	# Add Dropout
-	model.add(Dropout(0.4))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# 3rd Dense Layer
-	model.add(Dense(1000))
-	model.add(Activation('relu'))
-	# Add Dropout
-	model.add(Dropout(0.4))
-	# Batch Normalisation
-	model.add(BatchNormalization())
-
-	# Output Layer
-	model.add(Dense(17))
-	model.add(Activation('softmax'))
-
-
-	# (4) Compile 
-	model.compile(loss='sparse_categorical_crossentropy', optimizer='adam',\
-	metrics=['accuracy'])
-
-
-
-	# (5) Train
-	model.fit(x_train, y_train, batch_size=64, epochs=1, verbose=1, \
-	validation_split=0, shuffle=True)
-
-	load_network(model)
-
+	model.evaluate(test_ds) 
+	
 	return model
+
+
+def preprocess_image(arr): 
+	# Find average of all values in arr 
+	elem_sum = 0 
+	for i in np.ndindex(arr.shape): 
+		elem_sum += float(arr[i])
+	mean = elem_sum / arr.size 
+	
+	# Find standard deviation
+	dev_sum = 0 
+	for i in np.ndindex(arr.shape): 
+		dev_sum += (float(arr[i]) - mean) ** 2
+	dev = (dev_sum / arr.size) ** 0.5
+	
+	adjusted_dev = max(dev, 1.0 / math.sqrt(arr.size)) 
+	for i in np.ndindex(arr.shape): 
+		arr[i] = (arr[i] - mean) / adjusted_dev
+
+
+# Replaces None elements in the input tuple with 1s. 
+def none_tuple_replace(tup): 
+	lst = list(tup) 
+	for i in range(len(lst)):
+		if lst[i] is None: 
+			lst[i] = 1
+	return tuple(lst) 
+
 
 def relu(X):
    return np.maximum(0,X)
@@ -242,40 +201,30 @@ def softmax(X):
 	return expo/expo_sum
 
 
-def resizing(layer, inputs):
-	print("Resizing")
-	outputs = layer(inputs)
-	return outputs
-
 def conv_2D(layer, inputs):
-	print("Conv 2D")
-	print('Applying convolution') 
+	print('Conv 2D') 
 	epsilon = 0.01 # Accepted error 
-	max_iters = 1000000 # How many iterations it takes to calculate for ~10 seconds, modify as needed
+	iters_per_second = 1000 
+	total_seconds = 60 
+	total_iters = iters_per_second * total_seconds 
 	
 	# Actual output 
 	outputs = layer(inputs) 
 	outputnp = outputs.numpy()
 	
 	# Probability of replacing an actual output
-	iters = outputs.shape[1] * outputs.shape[2] * outputs.shape[3] * inputs.shape[3] 
-	probability = max_iters / iters
-	print('Probability:', str(round(probability, 3))) 
+	iters = outputs.shape[1] * outputs.shape[2] * outputs.shape[3] * inputs.shape[3] * layer.kernel_size[0] * layer.kernel_size[1] 
+	probability = total_iters / iters
 	
 	# Add padding so output is the same size as input 
-	inputs = np.pad(inputs, [(0, 0), (1, 1), (1, 1), (0, 0)], mode='constant') # count, x, y, channel
+	if layer.padding == 'same': 
+		pad = (layer.kernel_size[0] - 1) // 2
+		inputs = np.pad(inputs, [(0, 0), (pad, pad), (pad, pad), (0, 0)], mode='constant') # count, x, y, channel
 	
 	kernel = layer.kernel.numpy() 
 	weights = layer.weights[1].numpy() 
 	
-	counter = 0 
-	prev_value = 0
 	for x in range(outputs.shape[1]):
-		# Progress indicator 
-		if int(x / outputs.shape[1] * 10) != prev_value: 
-			prev_value = int(x / outputs.shape[1] * 10) 
-			print(str(prev_value * 10) + '%')
-		
 		for y in range(outputs.shape[2]):
 			result = 0 
 			for filter_index in range(outputs.shape[3]): 
@@ -285,7 +234,7 @@ def conv_2D(layer, inputs):
 					for kernel_x in range(layer.kernel_size[0]): 
 						for kernel_y in range(layer.kernel_size[1]): 
 							for channel in range(inputs.shape[3]): 
-								result += kernel[kernel_x][kernel_y][channel][filter_index] * inputs[0][x + kernel_x][y + kernel_y][channel]
+								result += kernel[kernel_x][kernel_y][channel][filter_index] * inputs[0][x * layer.strides[0] + kernel_x][y * layer.strides[1] + kernel_y][channel]
 					if result < 0: result = 0 
 					
 					# Compare expected vs actual value, exit if difference is too large 
@@ -297,87 +246,171 @@ def conv_2D(layer, inputs):
 						
 					# Replace output with our own calculated value
 					outputnp[0][x][y][filter_index] = result
-					counter += 1
-	
-	max_items = outputs.shape[1] * outputs.shape[2] * outputs.shape[3]
-	print(str(counter) + '/' + str(max_items), 'items replaced (' + str(round(counter / max_items * 100, 1)) + '%)')  
 	
 	# Replace with required data type 
 	eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)
 	return eager_tensor
-	outputs = layer(inputs)
-	return outputs
+
 
 def batch_normalization(layer, inputs):
 	print("Batch normalization")
 	outputs = layer(inputs)
-	return outputs
+	outputsnp = outputs.numpy()
+	
+	gamma = layer.weights[0].numpy() 
+	beta = layer.weights[1].numpy() 
+	running_mean = layer.weights[2].numpy() 
+	running_std = layer.weights[3].numpy()
+	
+	probability = (outputsnp.size / inputs.shape[3] * 30) / outputsnp.size 
+	
+	result = np.empty(shape=inputs.shape) 
+	it = np.ndindex(result.shape) 
+	for i in range(outputsnp.size // inputs.shape[3]):
+		if random.random() < probability: 
+			for f in range(inputs.shape[3]): 
+				index = next(it)
+				result[index] = gamma[f] * (inputs[index] - running_mean[f]) / math.sqrt(running_std[f] + layer.epsilon) + beta[f]
+		else: 
+			for f in range(inputs.shape[3]): 
+				index = next(it) 
+				result[index] = outputsnp[index] 
+	
+	# Verify average difference is less than 0.01 
+	diff = 0 
+	for x in np.ndindex(result.shape):
+		diff += abs(result[x] - outputsnp[x]) 
+	error = diff / outputsnp.size / probability
+	if error > 0.01: 
+		print('BatchNormalization error too high!', error)
+		sys.exit(0) 
+	
+	return tf.convert_to_tensor(result, dtype=np.float32)
 
-def activation(layer, inputs):
-	print("Activation")
-	outputs = layer(inputs)
-	return outputs
 
 def max_pooling(layer, inputs):
-	print("Max pooling")
+	print('Max pooling') 
 	outputs = layer(inputs)
-	return outputs
+	inputsnp = inputs.numpy()
+	outputsnp = outputs.numpy()
+	
+	for offset_x in range (0, inputsnp.shape[1], 2):
+		for offset_y in range (0, inputsnp.shape[2], 2):
+			for z in range (0, inputsnp.shape[3]):
+				max_value = float('-inf')
+				for kernel_x in range (2):
+					for kernel_y in range (2):
+						x = offset_x + kernel_x 
+						y = offset_y + kernel_y 
+						if inputsnp.shape[1] > x and inputsnp.shape[2] > y: 							
+							if inputsnp[0][x][y][z] > max_value:
+								max_value = inputsnp[0][x][y][z]
+				x = offset_x // 2 
+				y = offset_y // 2 
+				if outputsnp.shape[1] > x and outputsnp.shape[2] > y: 
+					outputsnp[0][x][y][z] = max_value
+
+	eager_tensor = tf.convert_to_tensor(outputsnp, dtype=np.float32)
+	return eager_tensor
+
 
 def flatten(layer, inputs):
-	print("Flatten")
-	outputs = layer(inputs)
-	return outputs
+	print('Flatten') 
+	result_array = np.empty(shape=none_tuple_replace(layer.output_shape)) 
+	i = 0 
+	for x in np.nditer(inputs.numpy()): 
+		result_array[0][i] = x
+		i += 1
+	eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
+	return eager_tensor 
+
 
 def dense(layer, inputs):
-	print("Dense")
-	outputs = layer(inputs)
-	return outputs
+	print('Dense')
+	result_array = np.zeros(shape=none_tuple_replace(layer.output_shape))
+	inputsnp = inputs.numpy()
+	weightsnp = layer.get_weights()[0]
+
+	for i in range(len(inputsnp)):
+	# iterating by column by B
+		for j in range(len(weightsnp[0])):
+			# iterating by rows of B
+			for k in range(len(weightsnp)):
+				result_array[i][j] += inputsnp[i][k] * weightsnp[k][j]
+
+
+	# matrix_mul_array = np.matmul(inputs.numpy(), layer.get_weights()[0])
+	bias_added_array = result_array + layer.get_weights()[1]
+	if ('relu' in str(layer.activation)):
+		activation_function_array = relu(bias_added_array)
+	elif ('softmax' in str(layer.activation)):
+	   activation_function_array = softmax(bias_added_array)
+	else: 
+		print('Unrecognized activation function:', layer.activation)
+		sys.exit(0)   
+
+	eager_tensor = tf.convert_to_tensor(activation_function_array, dtype=np.float32)
+	return eager_tensor
+
 
 def dropout(layer, inputs):
-	print("Dropout")
-	outputs = layer(inputs)
-	return outputs
-
+	# Note: 'dropout' is something that is only used in training, it's not used regularly! 
+	return tf.convert_to_tensor(inputs, dtype=np.float32)
+	
 
 def decode_predictions(pred):
-	labels = open('/Users/bora/Desktop/cifar10_labels.json')
-	labels = json.load(labels)
+	labels = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 	highest_pred = 0
 	highest_pred_index = -1
 	for i in range(len(pred[0])):
 		if pred[0][i] > highest_pred:
 			highest_pred = pred[0][i]
 			highest_pred_index = i
-	print("Prediction:", labels[highest_pred_index], highest_pred)
+	print(labels[highest_pred_index], highest_pred)
 
 
-if __name__ == '__main__':
-	model = create_alexnet()
-
-	im = Image.open('/Users/bora/Desktop/dog.jpg')
-	test_file = open('/Users/bora/Desktop/test.txt', 'w')
-	size = im.size
-	image_input = np.zeros(shape=(1, 224, 224, 3)) 
-	for x in range(224):
-		for y in range(224): 
-			pixel = im.getpixel((x / 224 * size[0], y / 224 * size[1])) 
-			for p in range(3): 
-				image_input[0][y][x][p] = pixel[p] / 255.0
-				test_file.write(str(image_input[0][y][x][p]) + ' ')
+def feedforward(model, image): 
 	# Feedforward
-	x = model.layers[0](image_input) # Setting inputs
-	for layer in model.layers[1:]:   # Feed forward each layer 
+	x = image
+	for layer in model.layers:
 		name = layer.__class__.__name__
-		if 'Conv2D' in name:         x = conv_2D(layer, x)
-		elif 'MaxPooling2D' in name: x = max_pooling(layer, x)
-		elif 'Flatten' in name:      x = flatten(layer, x) 
-		elif 'Dense' in name:        x = dense(layer, x)
-		elif 'Dropout' in name:      x = dropout(layer, x)
-		elif 'BatchNormalization' in name: x = batch_normalization(layer, x)
-		elif 'Activation' in name:         x = activation(layer, x)
-		elif 'Resizing' in name:           continue
+		if 'Conv2D' in name:         		x = conv_2D(layer, x)
+		elif 'MaxPooling2D' in name: 		x = max_pooling(layer, x)
+		elif 'Flatten' in name:      		x = flatten(layer, x) 
+		elif 'Dense' in name:        		x = dense(layer, x)
+		elif 'Dropout' in name:      		x = dropout(layer, x)
+		elif 'BatchNormalization' in name: 	x = batch_normalization(layer, x)
 		else: 
 			print('Unrecognized layer:', name)
 			sys.exit(0)
+	return x 
 
-	pred = decode_predictions(x.numpy()) #Prints the highest predicted class
+
+def test_image(model, name):
+	im = Image.open(name) 
+	image_input = np.empty(shape=(1, 227, 227, 3)) 
+	for x in range(227): 
+		for y in range(227): 
+			pixel = im.getpixel((x / 227 * 32, y / 227 * 32))
+			for p in range(3): 
+				image_input[0][y][x][p] = pixel[p] 
+	preprocess_image(image_input) 
+	
+	actual = model(image_input).numpy() 
+	ours = feedforward(model, image_input).numpy() 
+	
+	print() 
+	print('Name:', name) 
+	print('Actual: ', end='') 
+	decode_predictions(actual)
+	print('Ours: ', end='') 
+	decode_predictions(ours) 
+	print() 
+
+
+if __name__ == '__main__':
+	model = create_alexnet(train=False)
+
+	images = ['dog2.png', 'horse.png', 'car.png'] 
+	for name in images: 
+		test_image(model, 'data/' + name) 
