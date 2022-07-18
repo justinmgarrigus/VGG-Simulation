@@ -40,9 +40,27 @@ void vgg_image(char* file_name, ndarray* input) {
 	image_free(img);
 }
 
+void alexnet_image(char* file_name, ndarray* input) {
+	printf("Preprocessing...\n");
+}
+
 int main(int argc, char** argv) {
-	if (argc < 3 || argc > 4) {
-		printf("Format: ./vgg <network.nn> <labels.json> [<image.img>]\n"); 
+	if (argc != 2 ) {
+		printf("Format: ./vgg <model> <network.nn> <labels.json> [<image.img>]\n"); 
+		printf("  Model types: -vgg16 -alexnet\n");  
+		exit(1); 
+	}
+	
+	if (argv[1][0] == '-') 
+		argv[1] = argv[1] + 1;
+	
+	enum model_type type; 
+	if (strcmp(argv[1], "alexnet") == 0)
+		type = model_alexnet;
+	else if (strcmp(argv[1], "vgg16") == 0)
+		type = model_vgg16;
+	else {
+		printf("Unrecognized model type specified: '%s'\n", argv[1]);
 		exit(1); 
 	}
 	
@@ -54,13 +72,22 @@ int main(int argc, char** argv) {
 		exit(1); 
 	}
 	
-	network *network = network_create(argv[1], argv[2]);
-	
-	int length[4] = { 1, 224, 224, 3 };
-	ndarray *input = ndarray_create(4, length); 
+	network *network = network_create(type);
+	void (*preprocess)(char* file_name, ndarray* input);
+	ndarray *input; 
+	if (type == model_alexnet) {
+		preprocess = alexnet_image; 
+		int length[4] = { 1, 227, 227, 3 }; 
+		input = ndarray_create(4, length); 
+	}
+	else {
+		preprocess = vgg_image;
+		int length[4] = { 1, 224, 224, 3 };
+		input = ndarray_create(4, length); 
+	}
 	
 	if (argc == 4) {
-		vgg_image(argv[3], input); 
+		preprocess(argv[3], input); 
 	
 		network_feedforward(network, input); printf("\n");
 		network_decode_output(network); 
@@ -83,7 +110,7 @@ int main(int argc, char** argv) {
 			strcat(buffer, ".ppm"); 
 #endif
 			
-			vgg_image(buffer, input); 
+			preprocess(buffer, input); 
 			network_feedforward(network, input); printf("\n"); 
 			network_decode_output(network); printf("\n\n"); 
 		}

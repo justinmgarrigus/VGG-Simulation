@@ -36,7 +36,18 @@ char **get_labels_json(json_value* json) {
 	return labels; 
 }
 
-network* network_create(char* data_file, char* label_file) {
+network* network_create(enum model_type type) {
+	char *data_file; 
+	char *label_file; 
+	if (type == model_alexnet) {
+		data_file = "data/alexnet.nn"; 
+		label_file = "data/alexnet_labels.json"; 
+	}
+	else {
+		data_file = "data/vgg.nn"; 
+		label_file = "data/imagenet_labels.json"; 
+	}
+	
 	printf("Creating network from file '%s' with labels '%s'\n", data_file, label_file); 
 	FILE *file = fopen(data_file, "rb");
 	if (file == NULL) {

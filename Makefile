@@ -1,4 +1,5 @@
 FLAGS = -lcudart
+MODEL = -vgg16 
 
 .PHONY: internal-target external-target
 
@@ -7,10 +8,6 @@ ifeq ("$(wildcard lib/json-parser/*)", "")
 	git submodule init
 	git submodule update
 endif
-
-ifeq ("$(wildcard data/network.nn)", "") 
-	$(MAKE) nn
-endif 
 	
 ifeq ("$(wildcard lib/libjpeg/djpeg)", "")
 	$(MAKE) libjpeg
@@ -22,9 +19,6 @@ ifeq ("$(wildcard obj/*)", "")
 	mkdir -p obj/python 
 	mkdir -p bin 
 endif
-	
-nn: 
-	python3 src/python/network_operations.py -save data/network.nn
 
 libjpeg: 
 	cd lib/libjpeg ; \
@@ -32,8 +26,8 @@ libjpeg:
 	$(MAKE) ; \
 	$(MAKE) test ; \
 	sudo make install
-
-c: pre-build
+	
+c-compile: pre-build
 	nvcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS)
 	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser $(FLAGS)
 	nvcc -o obj/c/layer.o -c src/c/layer.cu $(FLAGS)
@@ -41,11 +35,17 @@ c: pre-build
 	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS)
 	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS)
 	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o obj/c/json.o -lm $(FLAGS)
-	bash -c "trap 'trap - SIGINT SIGTERM ERR; $(MAKE) c-clean; exit 1' SIGINT SIGTERM ERR; $(MAKE) c-run"
+
+alexnet: c-compile
+	bash -c "trap 'trap - SIGINT SIGTERM ERR; $(MAKE) c-clean; exit 1' SIGINT SIGTERM ERR; $(MAKE) c-run MODEL=alexnet"
 	$(MAKE) c-clean
 	
+vgg16: c-compile
+	bash -c "trap 'trap - SIGINT SIGTERM ERR; $(MAKE) c-clean; exit 1' SIGINT SIGTERM ERR; $(MAKE) c-run MODEL=vgg16"
+	$(MAKE) c-clean
+
 c-run:
-	./bin/vgg data/network.nn data/imagenet_class_index.json data/dog.jpg
+	./bin/vgg $(MODEL)
 
 c-clean: 
 	rm -f checkpoint_files/*

@@ -44,6 +44,10 @@ layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type typ
 			lr->feed = layer_dense_feedforward; 
 			break; 
 			
+		case layer_type_batch_normalization:
+			lr->feed = layer_batch_normalization_feedforward; 
+			break; 
+			
 		default: 
 			fprintf(stderr, "Unknown layer type specified: %d\n", type); 
 			exit(-1); 
@@ -280,6 +284,10 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 
 	ndarray_free(h_outputs);
 	ndarray_free(h_inputs);
+}
+
+void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_layer) {
+	// TODO 
 }
 
 __device__ ND_TYPE layer_activation(ND_TYPE* value, enum layer_activation activation) {

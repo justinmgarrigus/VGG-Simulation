@@ -15,6 +15,7 @@ np.random.seed(1000)
 magic_number = 1234 
 layer_types = {'InputLayer': 0, 'Conv2D': 1, 'MaxPooling2D': 2, 'Flatten': 3, 'Dense': 4, 'BatchNormalization': 5} 
 activation_types = {'relu': 1, 'softmax': 2}
+filtered_layers = {'Dropout'} 
 
 
 # Replaces None elements in the input tuple with 1s. 
@@ -50,10 +51,15 @@ def save_network(model, file_name):
 			write_int(dim) 
 	
 	write_int(1234)
-	write_int(len(model.layers)) 
+	
+	layer_count = len(model.layers) - len([x for x in model.layers if x.__class__.__name__ in filtered_layers]) 
+	write_int(layer_count) 
+	
+	print(len(model.layers), layer_count) 
 	
 	for layer in model.layers:
 		name = layer.__class__.__name__
+		if name in filtered_layers: continue 
 		layer_type = layer_types.get(name)
 		write_int(layer_type) 
 		
@@ -159,7 +165,7 @@ def create_alexnet(train=False):
 	
 	if train or not os.path.exists('data/alexnet.nn'):
 		model.fit(train_ds, epochs=1, validation_data=validation_ds, validation_freq=1) 
-		save_network('data/alexnet.nn') 
+		save_network(model, 'data/alexnet.nn') 
 	else: 
 		load_network(model, 'data/alexnet.nn') 
 	
@@ -477,6 +483,6 @@ if __name__ == '__main__':
 	model = create_alexnet(train) if name == 'alexnet' else create_vgg16(train) 
 	
 	if not train: 
-		test_files = ['dog.jpg'] if name == 'vgg16' else ['mini_dog.png', 'mini_horse.png', 'mini_car.png'] 
+		test_files = ['dog.jpg'] if name == 'vgg16' else ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg'] 
 		for test_file in test_files: 
 			test_image(model, name, 'data/' + test_file) 

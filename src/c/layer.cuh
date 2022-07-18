@@ -13,7 +13,8 @@ enum layer_type {
 	layer_type_convolutional = 1, 
 	layer_type_max_pooling = 2, 
 	layer_type_flatten = 3, 
-	layer_type_dense = 4
+	layer_type_dense = 4,
+	layer_type_batch_normalization = 5 
 }; 
 
 enum layer_activation {
@@ -37,6 +38,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer);
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer); 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer); 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer); 
+void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_layer); 
 
 __device__ ND_TYPE layer_activation(ND_TYPE* value); 
 __device__ ND_TYPE layer_relu(ND_TYPE* value); 
