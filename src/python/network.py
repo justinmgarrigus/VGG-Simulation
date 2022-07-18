@@ -12,104 +12,106 @@ import os
 
 np.random.seed(1000)
 
-def save_network(model, network_file_name):
-	print('Saving network to:', network_file_name) 
-	file = open(network_file_name, "wb")
-	magic_number = 1234
-	file.write(magic_number.to_bytes(4, byteorder='big', signed=True))
-	number_of_layers = len(model.layers)
-	file.write(number_of_layers.to_bytes(4, byteorder='big', signed=True))
+magic_number = 1234 
+layer_types = {'InputLayer': 0, 'Conv2D': 1, 'MaxPooling2D': 2, 'Flatten': 3, 'Dense': 4, 'BatchNormalization': 5} 
+activation_types = {'relu': 1, 'softmax': 2}
+
+
+# Replaces None elements in the input tuple with 1s. 
+def none_tuple_replace(tup): 
+	if isinstance(tup[0], tuple):
+		tup = tup[0] 
+		
+	lst = list(tup) 
+	for i in range(len(lst)):
+		if lst[i] is None: 
+			lst[i] = 1
+	return tuple(lst) 
+
+
+def save_network(model, file_name):
+	print('Saving network to:', file_name)
+	file = open(file_name, "wb")
+	
+	def write_int(value): 
+		file.write(value.to_bytes(4, byteorder='big', signed=True)) 
+	
+	def write_float(value): 
+		byte_arr = bytearray(struct.pack("f", value)) 
+		file.write(byte_arr)
+		
+	def write_shape(shape): 
+		if isinstance(shape, list): 
+			shape = shape[0] 
+		shape = none_tuple_replace(shape) 
+		
+		write_int(len(shape)) 
+		for dim in shape:
+			write_int(dim) 
+	
+	write_int(1234)
+	write_int(len(model.layers)) 
+	
 	for layer in model.layers:
-		if ('resizing' in str(layer.name)):
-			layer_type = 0
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		elif ('conv' in str(layer.name)):
-			layer_type = 1
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		elif ('pool' in str(layer.name)):
-			layer_type = 2
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		elif ('flatten' in str(layer.name)):
-			layer_type = 3
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		elif ('dense' in str(layer.name)):
-			layer_type = 4
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		elif ('batch' in str(layer.name)):
-			layer_type = 5
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		elif ('activation' in str(layer.name)):
-			layer_type = 6
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-			if ('relu' in str(layer.activation)):
-				type_of_activation = 1
-				file.write(type_of_activation.to_bytes(4, byteorder='big', signed=True))
-			elif ('softmax' in str(layer.activation)):
-				type_of_activation = 2
-				file.write(type_of_activation.to_bytes(4, byteorder='big', signed=True))
-		elif ('dropout' in str(layer.name)):
-			layer_type = 7
-			file.write(layer_type.to_bytes(4, byteorder='big', signed=True))
-		number_of_weight_indices = len(layer.get_weights())
-		file.write(number_of_weight_indices.to_bytes(4, byteorder='big', signed=True))
-		for weight_index in range(len(layer.get_weights())):
-			weightsnumpy = layer.get_weights()[weight_index]
-			length_of_weights_shape = len(weightsnumpy.shape)
-			file.write(length_of_weights_shape.to_bytes(4, byteorder='big', signed=True))
-			for i in range(len(weightsnumpy.shape)):
-				file.write(weightsnumpy.shape[i].to_bytes(4, byteorder='big', signed=True))
-			flattened_weights = weightsnumpy.flatten()
-			for i in range(len(flattened_weights)):
-				flattened_weights_value = flattened_weights[i]
-				ba = bytearray(struct.pack("f", flattened_weights_value))
-				file.write(ba)
-		output_shape = layer.output_shape if type(layer.output_shape) is tuple else layer.output_shape[0]
-		output_shape = list(output_shape)
-		output_shape[0] = 1 # replace None value
-		file.write(len(output_shape).to_bytes(4, byteorder='big', signed=True))
-		for dim in output_shape:
-			file.write(int(dim).to_bytes(4, byteorder='big', signed=True))
+		name = layer.__class__.__name__
+		layer_type = layer_types.get(name)
+		write_int(layer_type) 
+		
+		if layer_type == layer_types['Conv2D'] or layer_type == layer_types['Dense']: 
+			activation_type = activation_types.get(layer.activation.__name__)
+			write_int(activation_type) 
+		
+		write_int(len(layer.weights)) 
+		for weights in layer.weights: 
+			write_shape(weights.shape) 
+			for weight in np.nditer(weights): 
+				write_float(weight) 
+		
+		write_shape(layer.output_shape) 
+		
 	file.close()
-	print("Network saved to", network_file_name)
+	print("Network saved to", file_name)
 
 
-def load_network(model, file_name='data/alexnet.nn'):
+def load_network(model, file_name):
 	print('Loading network from:', file_name) 
 	file = open(file_name, "rb")
-	magic_number = int.from_bytes(file.read(4), byteorder='big', signed=True)
+	
+	def read_int(): 
+		return int.from_bytes(file.read(4), byteorder='big', signed=True) 
+		
+	def read_float(): 
+		byte_arr = file.read(4)
+		return struct.unpack("f", byte_arr)[0]
+	
+	magic_number = read_int() 
 	if magic_number != 1234:
 		print('Error: magic number in file', file_name, 'not 1234! Read:', magic_number) 
 		sys.exit(1) 
-	number_of_layers = int.from_bytes(file.read(4), byteorder='big', signed=True)
-	for layer_index in range(number_of_layers):
-		layer_type = int.from_bytes(file.read(4), byteorder='big', signed=True)
-		if (layer_type == 6):
-			file.read(4) # type of activation
-		number_of_weight_indices = int.from_bytes(file.read(4), byteorder='big', signed=True)
-		nd_list = []
-		for weight_index in range(number_of_weight_indices):
-			length_of_weights_shape = int.from_bytes(file.read(4), byteorder='big', signed=True)
-			weights_shape = []
-			for shape_index in range(length_of_weights_shape):
-				shape_value = int.from_bytes(file.read(4), byteorder='big', signed=True)
-				weights_shape.append(shape_value)
-			nd_array = np.empty(shape=tuple(weights_shape))
-			nd_list.append(nd_array)
-			number_of_data_stored_in_shape = 1
-			for i in range(len(weights_shape)):
-				number_of_data_stored_in_shape *= weights_shape[i]
-			it = np.ndindex(nd_array.shape)
-			for i in range(number_of_data_stored_in_shape):
-				ba = file.read(4)
-				ba = struct.unpack("f", ba)[0]
-				index = next(it) 
-				nd_array[index] = ba
-		model.layers[layer_index].set_weights(nd_list)
-		length_of_output_shape = int.from_bytes(file.read(4), byteorder='big', signed=True)
-		for output_shape_index in range(length_of_output_shape):
-			file.read(4) # dim
-	file.close()
-	print("Network loaded")
+	
+	for layer in range(read_int()): 
+		layer_type = read_int() 
+		if layer_type == layer_types['Conv2D'] or layer_type == layer_types['Dense']:
+			read_int() 
+		
+		weight_set = [] 
+		for weights in range(read_int()): 
+			shape = []
+			for dim in range(read_int()): 
+				shape.append(read_int()) 
+			
+			arr = np.empty(shape=tuple(shape))
+			weight_set.append(arr) 
+			
+			for index in np.ndindex(arr.shape): 
+				arr[index] = read_float() 
+		
+		model.layers[layer].set_weights(weight_set) 
+		for out in range(read_int()):
+			read_int()
+	
+	file.close() 
+	print('Network loaded') 
 	
 
 def create_alexnet(train=False):
@@ -170,6 +172,8 @@ def create_vgg16(train=False):
 	model = VGG16(weights='imagenet')
 	if train or not os.path.exists('data/alexnet.nn'): 
 		save_network(model, 'data/vgg16.nn') 
+	else: 
+		load_network(model, 'data/vgg16.nn') 
 	return model 
 
 
@@ -235,18 +239,6 @@ def vgg16_preprocess(image, input_shape):
 	
 	print(avg) 
 	return image_input 
-
-
-# Replaces None elements in the input tuple with 1s. 
-def none_tuple_replace(tup): 
-	if isinstance(tup[0], tuple):
-		tup = tup[0] 
-		
-	lst = list(tup) 
-	for i in range(len(lst)):
-		if lst[i] is None: 
-			lst[i] = 1
-	return tuple(lst) 
 
 
 def relu(X):
