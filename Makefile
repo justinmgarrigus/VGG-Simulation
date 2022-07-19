@@ -1,5 +1,5 @@
 FLAGS = -lcudart
-INCLUDES = -I/usr/local/cuda/include
+INCLUDES = -I/usr/local/cuda/include -Isrc/c -Isrc/gpu
 MODEL = -vgg16 
 
 .PHONY: internal-target external-target
@@ -32,7 +32,7 @@ c-compile: pre-build
 	gcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/layer.o -c src/c/layer.c $(FLAGS) $(INCLUDES)
-	nvcc -o obj/c/layer_gpu.o -c src/c/layer_gpu.cu $(FLAGS) $(INCLUDES)
+	nvcc -o obj/c/layer_gpu.o -c src/gpu/layer_gpu.cu $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS) $(INCLUDES)
