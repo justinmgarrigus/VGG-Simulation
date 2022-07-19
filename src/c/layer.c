@@ -66,6 +66,27 @@ void layer_free(layer* layer) {
 	free(layer);
 }
 
+ndarray** layer_copy_weights(layer* lr, enum cudaMemcpyKind kind) {
+	ndarray **copied_weights;
+	if (kind == cudaMemcpyDeviceToHost) {
+		ndarray **host_weights = malloc(sizeof(ndarray*) * lr->weight_set_count); 
+		cudaMemcpy(host_weights, lr->weights, sizeof(ndarray*) * lr->weight_set_count, kind); 
+		copied_weights = malloc(sizeof(ndarray*) * lr->weight_set_count);
+		for (int i = 0; i < lr->weight_set_count; i++)
+			copied_weights[i] = ndarray_copy(copied_weights[i], kind);
+		free(host_weights); 
+	}
+	else if (kind == cudaMemcpyHostToDevice) {
+		ndarray **host_weights = malloc(sizeof(ndarray*) * lr->weight_set_count); 
+		for (int i = 0; i < lr->weight_set_count; i++) 
+			host_weights[i] = ndarray_copy(lr->weights[i], kind); 
+		cudaMalloc(&copied_weights, sizeof(ndarray*) * lr->weight_set_count);
+		cudaMemcpy(copied_weights, host_weights, sizeof(ndarray*) * lr->weight_set_count, kind);
+		free(host_weights);
+	}
+	return copied_weights; 
+}
+
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 	layer_convolutional_feedforward_gpu_setup(input_layer, conv_layer); 
 }

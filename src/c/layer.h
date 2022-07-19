@@ -30,6 +30,7 @@ struct layer {
 
 layer* layer_create(int weight_set_count, ndarray** weights, enum layer_type type, enum layer_activation activation, ndarray* outputs); 
 void layer_free(layer* layer); 
+ndarray** layer_copy_weights(layer* lr, enum cudaMemcpyKind kind); 
 
 void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer);
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer); 
