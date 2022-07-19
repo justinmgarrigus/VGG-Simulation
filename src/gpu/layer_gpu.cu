@@ -1,6 +1,7 @@
 #include <stdio.h> 
 #include "cuda_runtime.h" 
 #include "device_launch_parameters.h" 
+#include "cudaTensorCoreGemm.cuh" 
 
 extern "C" {
 	#include "layer_gpu.cuh" 
@@ -105,6 +106,8 @@ __host__ void layer_dense_feedforward_gpu_setup(layer* input_layer, layer* dense
 	int things_to_process = h_outputs->shape[1];
 	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process;
 	int blocks = things_to_process / threads + 1;
+	
+	matrix_multiply(h_inputs, h_outputs, NULL, NULL); 
 
 	layer_dense_feedforward_gpu<<<blocks, threads>>>(
 		input_layer->outputs, dense_layer->outputs, dense_layer->weights, blocks, threads);

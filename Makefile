@@ -17,6 +17,7 @@ endif
 ifeq ("$(wildcard obj/*)", "") 
 	mkdir -p obj 
 	mkdir -p obj/c 
+	mkdir -p obj/gpu
 	mkdir -p obj/python 
 	mkdir -p bin 
 endif
@@ -32,10 +33,11 @@ c-compile: pre-build
 	gcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/layer.o -c src/c/layer.c $(FLAGS) $(INCLUDES)
-	nvcc -o obj/c/layer_gpu.o -c src/gpu/layer_gpu.cu $(FLAGS) $(INCLUDES)
+	nvcc -o obj/gpu/layer_gpu.o -c src/gpu/layer_gpu.cu $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS) $(INCLUDES)
+	nvcc -o obj/gpu/cudaTensorCoreGemm.o -c src/gpu/cudaTensorCoreGemm.cu $(FLAGS) $(INCLUDES) -Ilib/Common -arch=sm_70
 	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/layer_gpu.o obj/c/ndarray.o obj/c/image.o obj/c/json.o -lm $(FLAGS)
 
 alexnet: c-compile
