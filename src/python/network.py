@@ -177,9 +177,7 @@ def create_alexnet(train=False):
 def create_vgg16(train=False): 
 	model = VGG16(weights='imagenet')
 	if train or not os.path.exists('data/alexnet.nn'): 
-		save_network(model, 'data/vgg16.nn') 
-	else: 
-		load_network(model, 'data/vgg16.nn') 
+		save_network(model, 'data/vgg16.nn')
 	return model 
 
 
@@ -383,29 +381,22 @@ def flatten(layer, inputs):
 
 def dense(layer, inputs):
 	print('Dense')
-	result_array = np.zeros(shape=none_tuple_replace(layer.output_shape))
 	inputsnp = inputs.numpy()
 	weightsnp = layer.get_weights()[0]
-
-	for i in range(len(inputsnp)):
-	# iterating by column by B
-		for j in range(len(weightsnp[0])):
-			# iterating by rows of B
-			for k in range(len(weightsnp)):
-				result_array[i][j] += inputsnp[i][k] * weightsnp[k][j]
-
-
-	# matrix_mul_array = np.matmul(inputs.numpy(), layer.get_weights()[0])
-	bias_added_array = result_array + layer.get_weights()[1]
+	biasnp = layer.get_weights()[1] 
+	
+	result_array = np.matmul(inputs.numpy(), weightsnp) 
+	result_array += biasnp 
+	
 	if ('relu' in str(layer.activation)):
-		activation_function_array = relu(bias_added_array)
+		result_array = relu(result_array)
 	elif ('softmax' in str(layer.activation)):
-	   activation_function_array = softmax(bias_added_array)
+		result_array = softmax(result_array) 
 	else: 
 		print('Unrecognized activation function:', layer.activation)
 		sys.exit(0)   
 
-	eager_tensor = tf.convert_to_tensor(activation_function_array, dtype=np.float32)
+	eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
 	return eager_tensor
 
 
