@@ -1,12 +1,9 @@
 #ifndef LAYER_H
 #define LAYER_H 
 
-#include "cuda_runtime.h" 
 #include "ndarray.h" 
 
 typedef struct layer layer; 
-
-int dense_counter; 
 
 enum layer_type {
 	layer_type_none = 0, 
@@ -39,15 +36,5 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer);
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer); 
 void layer_dense_feedforward(layer* input_layer, layer* dense_layer); 
 void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_layer); 
-
-__device__ ND_TYPE layer_activation(ND_TYPE* value); 
-__device__ ND_TYPE layer_relu(ND_TYPE* value); 
-__device__ ND_TYPE layer_softmax(ND_TYPE* value); 
-
-void layer_log(layer* layer, int index); 
-
-#ifdef DRAW_PROGRESS 
-double network_operation_time; 
-#endif
 
 #endif 

@@ -1,7 +1,7 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include "layer.cuh" 
+#include "layer.h" 
 
 enum model_type { model_alexnet, model_vgg16 }; 
 

@@ -1,4 +1,5 @@
 FLAGS = -lcudart
+INCLUDES = -I/usr/local/cuda/include
 MODEL = -vgg16 
 
 .PHONY: internal-target external-target
@@ -28,13 +29,14 @@ libjpeg:
 	sudo make install
 	
 c-compile: pre-build
-	nvcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS)
-	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser $(FLAGS)
-	nvcc -o obj/c/layer.o -c src/c/layer.cu $(FLAGS)
-	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS)
-	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS)
-	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS)
-	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/ndarray.o obj/c/image.o obj/c/json.o -lm $(FLAGS)
+	gcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS) $(INCLUDES)
+	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser $(FLAGS) $(INCLUDES)
+	gcc -o obj/c/layer.o -c src/c/layer.c $(FLAGS) $(INCLUDES)
+	nvcc -o obj/c/layer_gpu.o -c src/c/layer_gpu.cu $(FLAGS) $(INCLUDES)
+	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS) $(INCLUDES)
+	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS) $(INCLUDES)
+	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS) $(INCLUDES)
+	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/c/layer_gpu.o obj/c/ndarray.o obj/c/image.o obj/c/json.o -lm $(FLAGS)
 
 alexnet: c-compile
 	bash -c "trap 'trap - SIGINT SIGTERM ERR; $(MAKE) c-clean; exit 1' SIGINT SIGTERM ERR; $(MAKE) c-run MODEL=alexnet"
