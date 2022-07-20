@@ -2,10 +2,12 @@
 import sys
 import keras
 from keras.applications.vgg16 import VGG16, decode_predictions
+from keras.utils.np_utils import to_categorical 
 import numpy as np
 import tensorflow as tf
 import struct
 from PIL import Image
+import pandas
 import random
 import math 
 import os 
@@ -16,6 +18,7 @@ magic_number = 1234
 layer_types = {'InputLayer': 0, 'Conv2D': 1, 'MaxPooling2D': 2, 'Flatten': 3, 'Dense': 4, 'BatchNormalization': 5} 
 activation_types = {'relu': 1, 'softmax': 2}
 filtered_layers = {'Dropout'} 
+network_types = ['vgg16', 'alexnet', 'lenet'] 
 
 
 # Replaces None elements in the input tuple with 1s. 
@@ -54,8 +57,6 @@ def save_network(model, file_name):
 	
 	layer_count = len(model.layers) - len([x for x in model.layers if x.__class__.__name__ in filtered_layers]) 
 	write_int(layer_count) 
-	
-	print(len(model.layers), layer_count) 
 	
 	for layer in model.layers:
 		name = layer.__class__.__name__
@@ -181,7 +182,55 @@ def create_vgg16(train=False):
 	return model 
 
 
-def alexnet_preprocess(image, input_shape):
+def create_lenet(train=False): 
+	train = train or not os.path.exists('data/lenet.nn')
+
+	train_set = pandas.read_csv('data/lenet_train.csv') 
+	test_set = pandas.read_csv('data/lenet_test.csv') 
+	
+	Y_train = train_set[['label']] 
+	X_train = train_set.drop(train_set.columns[[0]], axis=1) 
+	X_test = test_set 
+	
+	X_train = np.array(X_train) 
+	X_test = np.array(X_test) 
+	
+	X_train = X_train.reshape(X_train.shape[0], 28, 28, 1) 
+	X_test = X_test.reshape(X_test.shape[0], 28, 28, 1) 
+	
+	# Padding the images by 2 pixels since the paper input images were 32x32 
+	X_train = np.pad(X_train, ((0,0),(2,2),(2,2),(0,0)), 'constant') 
+	X_test = np.pad(X_test, ((0,0),(2,2),(2,2),(0,0)), 'constant') 
+	
+	# Standardization 
+	mean_px = X_train.mean().astype(np.float32)
+	std_px = X_train.std().astype(np.float32) 
+	X_train = (X_train - mean_px)/(std_px) 
+	
+	Y_train = to_categorical(Y_train)
+	
+	model = keras.models.Sequential([\
+	keras.layers.Conv2D(filters=6, kernel_size=5, strides=1, activation='relu', input_shape=(32,32,1)),\
+	keras.layers.MaxPool2D(pool_size=2, strides=2),\
+	keras.layers.Conv2D(filters=16, kernel_size=5, strides=1, activation='relu', input_shape=(14,14,6)),\
+	keras.layers.MaxPool2D(pool_size=2, strides=2),\
+	keras.layers.Flatten(),\
+	keras.layers.Dense(units=120, activation='relu'),\
+	keras.layers.Dense(units=84, activation='relu'),\
+	keras.layers.Dense(units=10, activation='softmax')]) 
+	
+	model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']) 
+	
+	epoch_count = 42 if train else 1
+	model.fit(X_train, Y_train, steps_per_epoch=10, epochs=epoch_count)
+	
+	if train: save_network(model, 'data/lenet.nn')
+	else: load_network(model, 'data/lenet.nn') 
+	
+	return model 
+
+
+def image_mean_dev(image): 
 	size = image.size[0] * image.size[1] * 3
 	
 	# Average of all colors in image 
@@ -189,8 +238,10 @@ def alexnet_preprocess(image, input_shape):
 	for x in range(image.size[0]):
 		for y in range(image.size[1]): 
 			pixel = image.getpixel((x, y)) 
-			for p in pixel:
-				elem_sum += p 
+			if isinstance(pixel, int): elem_sum += pixel 
+			else: 
+				for p in pixel:
+					elem_sum += p 
 	mean = elem_sum / size
 
 	# Standard deviation
@@ -198,10 +249,18 @@ def alexnet_preprocess(image, input_shape):
 	for x in range(image.size[0]):
 		for y in range(image.size[1]): 
 			pixel = image.getpixel((x, y)) 
-			for p in pixel: 
-				deviation_sum += (p - mean) ** 2
+			if isinstance(pixel, int): deviation_sum += (pixel - mean) ** 2 
+			else: 
+				for p in pixel: 
+					deviation_sum += (p - mean) ** 2
 	dev = math.sqrt(deviation_sum / size)
 	adjusted_dev = max(dev, 1.0 / math.sqrt(size)) 
+	
+	return (mean, adjusted_dev) 
+
+
+def alexnet_preprocess(image, input_shape):
+	mean, dev = image_mean_dev(image) 
 	
 	image_input = np.empty(shape=input_shape)
 	for x in range(input_shape[1]): 
@@ -210,7 +269,7 @@ def alexnet_preprocess(image, input_shape):
 			im_y = int(y / input_shape[2] * image.size[1]) 
 			pixel = image.getpixel((im_x, im_y))
 			for p in range(3): 
-				image_input[0][y][x][p] = (pixel[p] - mean) / adjusted_dev
+				image_input[0][y][x][p] = (pixel[p] - mean) / dev
 	
 	return image_input 
 
@@ -241,9 +300,20 @@ def vgg16_preprocess(image, input_shape):
 			image_input[0][y][x][2] = image_input[0][y][x][0] 
 			image_input[0][y][x][0] = temp 
 	
-	print(avg) 
 	return image_input 
 
+
+def lenet_preprocess(image, input_shape): 
+	mean, dev = image_mean_dev(image) 
+
+	image_input = np.zeros(shape=input_shape) 
+	for x in range(image.size[0]):
+		for y in range(image.size[1]): 	
+			pixel = image.getpixel((x, y))
+			image_input[0][x + 2][y + 2] = (pixel - mean) / dev
+
+	return image_input 
+	
 
 def relu(X):
    return np.maximum(0,X)
@@ -385,8 +455,16 @@ def dense(layer, inputs):
 	weightsnp = layer.get_weights()[0]
 	biasnp = layer.get_weights()[1] 
 	
+	print('Input shape:', inputs.numpy().shape) 
+	print('Weights shape:', weightsnp.shape) 
+	print('Biases shape:', biasnp.shape) 
 	result_array = np.matmul(inputs.numpy(), weightsnp) 
 	result_array += biasnp 
+	
+	print('Outputs shape:', result_array.shape) 
+	# m = 1			inputs.shape[0] 
+	# k = 25088 	inputs.shape[1] 
+	# n = 4096 		weights.shape[1] 
 	
 	if ('relu' in str(layer.activation)):
 		result_array = relu(result_array)
@@ -409,6 +487,14 @@ def top_prediction(pred, model_type):
 	if model_type == 'vgg16':
 		p = decode_predictions(pred) 
 		print(p[0][0]) 
+	elif model_type == 'lenet': 
+		highest_pred = 0
+		highest_pred_index = -1
+		for i in range(len(pred[0])):
+			if pred[0][i] > highest_pred:
+				highest_pred = pred[0][i]
+				highest_pred_index = i
+		print(highest_pred_index) 
 	else: 
 		labels = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 		highest_pred = 0
@@ -439,10 +525,13 @@ def feedforward(model, image):
 
 
 def test_image(model, model_type, image_name):
-	preprocess = alexnet_preprocess if model_type == 'alexnet' else vgg16_preprocess
 	input_shape = none_tuple_replace(model.layers[0].input_shape)
-	im = Image.open(image_name)  
-	image_input = preprocess(im, input_shape) 
+	im = Image.open(image_name)
+	
+	if model_type == 'alexnet': preprocess = alexnet_preprocess
+	elif model_type == 'vgg16': preprocess = vgg16_preprocess 
+	else: preprocess = lenet_preprocess 
+	image_input = preprocess(im, input_shape)
 	
 	actual = model(image_input).numpy() 
 	ours = feedforward(model, image_input).numpy() 
@@ -459,21 +548,26 @@ def test_image(model, model_type, image_name):
 if __name__ == '__main__':
 	if len(sys.argv) < 2 or len(sys.argv) > 3: 
 		print('Usage: python3 src/python/network.py <model> <options>')
-		print('  Models: -alexnet -vgg16')
+		print('  Models: -alexnet -vgg16 -lenet')
 		print('  Options: -train') 
 		sys.exit(1) 
 	
 	name = sys.argv[1] 
 	if name[0] == '-': name = name[1:]
-	if name != 'alexnet' and name != 'vgg16':
+	if name not in network_types:
 		print('Model type', sys.argv[1], 'does not match known model.')
-		print('Known models: -alexnet -vgg16') 
+		print('Known models: -alexnet -vgg16 -lenet') 
 		sys.exit(1) 
 	
 	train = (sys.argv[2] == '-train') if len(sys.argv) == 3 else False
-	model = create_alexnet(train) if name == 'alexnet' else create_vgg16(train) 
+	if name == 'alexnet': model = create_alexnet(train)
+	elif name == 'vgg16': model = create_vgg16(train) 
+	else: model = create_lenet(train) 
 	
 	if not train: 
-		test_files = ['dog.jpg'] if name == 'vgg16' else ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg'] 
+		if name == 'vgg16': test_files = ['dog.jpg'] 
+		elif name == 'alexnet': test_files = ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg']
+		else: test_files = ['digit.jpg']
+		
 		for test_file in test_files: 
 			test_image(model, name, 'data/' + test_file) 
