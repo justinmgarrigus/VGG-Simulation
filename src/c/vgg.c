@@ -45,7 +45,7 @@ void alexnet_image(char* file_name, ndarray* input) {
 	printf("Preprocessing...\n");
 }
 
-int main(int argc, char** argv) {
+int main_temp(int argc, char** argv) {
 	if (argc != 2 ) {
 		printf("Format: ./vgg <model> <network.nn> <labels.json> [<image.img>]\n"); 
 		printf("  Model types: -vgg16 -alexnet\n");  

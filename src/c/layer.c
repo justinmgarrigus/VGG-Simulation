@@ -73,7 +73,7 @@ ndarray** layer_copy_weights(layer* lr, enum cudaMemcpyKind kind) {
 		cudaMemcpy(host_weights, lr->weights, sizeof(ndarray*) * lr->weight_set_count, kind); 
 		copied_weights = malloc(sizeof(ndarray*) * lr->weight_set_count);
 		for (int i = 0; i < lr->weight_set_count; i++)
-			copied_weights[i] = ndarray_copy(copied_weights[i], kind);
+			copied_weights[i] = ndarray_copy(host_weights[i], kind);
 		free(host_weights); 
 	}
 	else if (kind == cudaMemcpyHostToDevice) {

@@ -92,52 +92,55 @@ __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* ou
 __host__ void layer_dense_feedforward_gpu_setup(layer* input_layer, layer* dense_layer) {
 	printf("--Dense\n"); 
 	
-	// Max thread count 
-	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, 0);
-	int max_threads_per_block = prop.maxThreadsPerBlock;
-
-	// Move outputs to the host
-	ndarray *h_outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost);
-
-	// Move inputs to the host
-	ndarray *h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
-
-	int things_to_process = h_outputs->shape[1];
-	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process;
-	int blocks = things_to_process / threads + 1;
+	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
+	ndarray **weight_set = layer_copy_weights(dense_layer, cudaMemcpyDeviceToHost); 
+	ndarray *weights = weight_set[0]; 
+	ndarray *biases = weight_set[1]; 
+	ndarray *output = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost); 
 	
-	matrix_multiply(h_inputs, h_outputs, NULL, NULL); 
-
-	layer_dense_feedforward_gpu<<<blocks, threads>>>(
-		input_layer->outputs, dense_layer->outputs, dense_layer->weights, blocks, threads);
-	if (cudaGetLastError() != cudaSuccess) {
-		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
-		exit(1);
-	}
-	cudaDeviceSynchronize();
+	//invoke_beginning(input, weights, biases, output); 
+	matrix_multiply(input, weights, biases, output); 
 	
-	switch (dense_layer->activation) {
-		case layer_activation_relu: 
-			layer_dense_gpu_relu<<<1,1>>>(dense_layer->outputs); 
-			break; 
-		
-		case layer_activation_softmax: 
-			layer_dense_gpu_divsum<<<1,1>>>(dense_layer->outputs); 
-			break; 
-			
-		default: 
-			fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation); 
-			exit(1); 
-	}
-	if (cudaGetLastError() != cudaSuccess) {
-		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
-		exit(1);
-	}
-	cudaDeviceSynchronize();
-
-	ndarray_free(h_outputs);
-	ndarray_free(h_inputs);
+//	dense_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
+//
+//	// Max thread count 
+//	cudaDeviceProp prop;
+//	cudaGetDeviceProperties(&prop, 0);
+//	int max_threads_per_block = prop.maxThreadsPerBlock;
+//
+//	// Move outputs to the host
+//	ndarray *h_outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost);
+//
+//	// Move inputs to the host
+//	ndarray *h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
+//
+//	int things_to_process = h_outputs->shape[1];
+//	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process;
+//	int blocks = things_to_process / threads + 1;
+//	
+//	matrix_multiply(h_inputs, h_outputs, NULL, NULL); 
+//
+//	layer_dense_feedforward_gpu<<<blocks, threads>>>(
+//		input_layer->outputs, dense_layer->outputs, dense_layer->weights, blocks, threads);
+//	if (cudaGetLastError() != cudaSuccess) {
+//		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
+//		exit(1);
+//	}
+//	cudaDeviceSynchronize();
+//
+//	switch (dense_layer->activation) {
+//		case layer_activation_relu: 
+//			layer_dense_gpu_relu<<<1,1>>>(dense_layer->outputs); 
+//			break; 
+//		
+//		case layer_activation_softmax: 
+//			layer_dense_gpu_divsum<<<1,1>>>(dense_layer->outputs); 
+//			break; 
+//			
+//		default: 
+//			fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation); 
+//			exit(1); 
+//	}
 }
 
 __global__ void layer_dense_feedforward_gpu(ndarray* inputs, ndarray* outputs, ndarray** weight_set, int blocks, int threads) {
