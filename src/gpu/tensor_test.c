@@ -11,9 +11,8 @@ float rand_float(int min, int max) {
 }
 
 int main() {
-	printf("Started!\n"); 
-	const int input_size = 20000; 
-	const int output_size = 4000;
+	const int input_size = 4000; 
+	const int output_size = 1000;
 	printf("input_size: %d, output_size: %d\n", input_size, output_size); 
 
 	int input_shape[2] = { 1, input_size };
@@ -35,7 +34,6 @@ int main() {
 	// Constraint: input_size > output_size 
 	int reformat_shape[2] = { input_size, input_size };
 	ndarray* b_reformatted = ndarray_create(2, reformat_shape);
-	printf("%p, %p, %p, %p\n", b_reformatted->arr, b_reformatted->shape, b_reformatted->cumulative, b_reformatted);
 	for (int r = 0; r < input_size; r++) {
 		for (int c = 0; c < output_size; c++)
 			b_reformatted->arr[r * input_size + c] = weights->arr[r * output_size + c]; 
@@ -56,4 +54,10 @@ int main() {
 		if (error > highest_error) highest_error = error; 
 	}
 	printf("Highest error: %f\n", highest_error); 
+
+	ndarray_free(input); 
+	ndarray_free(weights);
+	ndarray_free(biases);
+	ndarray_free(result);
+	ndarray_free(b_reformatted);
 }

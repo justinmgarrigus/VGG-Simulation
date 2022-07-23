@@ -458,20 +458,7 @@ int pad_multiple(int value, int multiple) {
 }
 
 __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
-	printf("Entering matrix_multiply\n"); 
-	printf("h_A: "); ndarray_fprint(h_A, stdout);
-	printf(", h_B: "); ndarray_fprint(h_B, stdout);
-	printf(", h_C: "); ndarray_fprint(h_C, stdout);
-	printf(", h_D: "); ndarray_fprint(h_D, stdout);
-	printf("\n"); 
-	
-    enum {
-        // Compute the right amount of shared memory to request.
-        // We need shared memory to hold per-CTA C and D matrix tiles, and to cache
-        // per-CTA chunks
-        // of the A and B matrices. Therefore, the right amount to request is the
-        // maximum of those
-        // two numbers.
+	enum {
         SHMEM_SZ = MAX(
             sizeof(half) * (BLOCK_COL_TILES * M) * (CHUNK_K * K + SKEW_HALF) * 2,
             M * (BLOCK_ROW_WARPS * WARP_ROW_TILES) * N *
@@ -510,12 +497,10 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     for (int i = h_A->shape[1]; i < m_global * k_global; i++)
         A[i] = (half)0.0;
 	
-//    for (int j = 0; j < h_B->shape[0]; j++) {
-//        for (int i = 0; i < h_B->shape[1]; i++)
-//            B[i + j * n_global] = (half)h_B->arr[i + j * h_B->shape[1]];
-//        for (int i = h_B->shape[1]; i < n_global; i++)
-//            B[i + j * n_global] = (half)0.0; 
-//    }
+    // TODO: Since the compute_gemm kernel considers B to be in col-major order, 
+    // we have to transpose the matrix when loading it in. This means we have to
+    // assume B is square, so enough space is allowed for a transpose. This 
+    // should be fixed in the future to conserve space! 
     for (int j = 0; j < h_B->shape[1]; j++) {
         for (int i = 0; i < h_B->shape[0]; i++)
             B[i + j * n_global] = (half)h_B->arr[j + i * h_B->shape[1]];
@@ -523,7 +508,7 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
             B[i + j * n_global] = (half)0.0; 
     }
 
-    for (int i = 0; i < h_B->shape[1]; i++)
+    for (int i = 0; i < h_C->shape[1]; i++)
         C[i] = (float)h_C->arr[i];
 	
     half* d_A; checkCudaErrors(cudaMalloc(&d_A, sizeof(half) * m_global * k_global));
@@ -536,18 +521,12 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     checkCudaErrors(cudaMemcpy(d_C, C, sizeof(float) * m_global * n_global, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_D, D, sizeof(float) * m_global * n_global, cudaMemcpyHostToDevice));
 
-    // Convert d_A, d_B, d_C into equivalent arrays. 
-    // Allocate space for d. 
-    // Run function. 
-    // Copy data from d back into d_D. 
-    // Free unused data. 
-
     checkCudaErrors(cudaFuncSetAttribute(compute_gemm, cudaFuncAttributeMaxDynamicSharedMemorySize, SHMEM_SZ));
     checkKernelErrors((compute_gemm<<<deviceProp.multiProcessorCount, THREADS_PER_BLOCK, SHMEM_SZ>>>(d_A, d_B, d_C, d_D, m_tiles, n_tiles, k_tiles)));
     checkCudaErrors(cudaDeviceSynchronize());
 
-    cudaMemcpy(D, d_D, sizeof(float)* m_global* n_global, cudaMemcpyDeviceToHost); 
-    for (int i = 0; i < h_B->shape[1]; i++)
+    checkCudaErrors(cudaMemcpy(D, d_D, sizeof(float)* m_global* n_global, cudaMemcpyDeviceToHost)); 
+    for (int i = 0; i < h_D->shape[1]; i++)
         h_D->arr[i] = (ND_TYPE)D[i]; 
 
     free(A);
