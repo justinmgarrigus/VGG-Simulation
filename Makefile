@@ -54,9 +54,12 @@ c-run:
 c-clean: 
 	rm -f checkpoint_files/*
 	rm -rf checkpoint_files 
-	rm _app_cuda_version_*
-	rm _cuobjdump_list_ptx_*
-	rm vgg.1.sm_*
+	rm -f _app_cuda_version_*
+	rm -f _cuobjdump_list_ptx_*
+	rm -f vgg.1.sm_*
+	rm -f *.ptx
+	rm -f *.ptxas
+	rm -f gpgpu_inst_stats.txt
 
 python: 
 	python3 src/python/vgg.py
