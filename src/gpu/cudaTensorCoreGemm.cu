@@ -458,6 +458,27 @@ int pad_multiple(int value, int multiple) {
 }
 
 __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
+    // Assumption: since compute_gemm considers B to be col-wise (which doesn't work 
+    // for our purposes), we need to transpose it. Thus, B must be square!
+    // Constraint: input_size (h_A->shape[1]) > output_size (h_B->shape[1])
+    bool reformatted_b_matrix = h_B->shape[0] != h_B->shape[1]; 
+    if (reformatted_b_matrix) {
+        const int input_size = h_A->shape[1],
+            output_size = h_B->shape[1];
+
+        int reformat_shape[2] = { input_size, input_size };
+        ndarray* b_reformatted = ndarray_create(2, reformat_shape);
+
+        for (int r = 0; r < input_size; r++) {
+            for (int c = 0; c < output_size; c++)
+                b_reformatted->arr[r * input_size + c] = h_B->arr[r * output_size + c];
+            for (int c = output_size; c < input_size; c++)
+                b_reformatted->arr[r * input_size + c] = 0;
+        }
+
+        h_B = b_reformatted; 
+    }
+
 	enum {
         SHMEM_SZ = MAX(
             sizeof(half) * (BLOCK_COL_TILES * M) * (CHUNK_K * K + SKEW_HALF) * 2,
@@ -537,6 +558,8 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     checkCudaErrors(cudaFree(d_B));
     checkCudaErrors(cudaFree(d_C));
     checkCudaErrors(cudaFree(d_D));
+
+    if (reformatted_b_matrix) ndarray_free(h_B); 
 }
 
 int invoke_beginning(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {

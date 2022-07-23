@@ -30,18 +30,7 @@ int main() {
 	int result_shape[2] = { 1, output_size }; 
 	ndarray* result = ndarray_create(2, result_shape); 
 
-	// Reformat B array so it's square and transpose-able.
-	// Constraint: input_size > output_size 
-	int reformat_shape[2] = { input_size, input_size };
-	ndarray* b_reformatted = ndarray_create(2, reformat_shape);
-	for (int r = 0; r < input_size; r++) {
-		for (int c = 0; c < output_size; c++)
-			b_reformatted->arr[r * input_size + c] = weights->arr[r * output_size + c]; 
-		for (int c = output_size; c < input_size; c++)
-			b_reformatted->arr[r * input_size + c] = 0; 
-	}
-
-	matrix_multiply(input, b_reformatted, biases, result);
+	matrix_multiply(input, weights, biases, result);
 
 	float highest_error = 0; 
 	for (int i = 0; i < weight_shape[1]; i++) {
@@ -59,5 +48,4 @@ int main() {
 	ndarray_free(weights);
 	ndarray_free(biases);
 	ndarray_free(result);
-	ndarray_free(b_reformatted);
 }
