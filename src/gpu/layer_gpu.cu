@@ -1,7 +1,8 @@
 #include <stdio.h> 
+#include <math.h> 
 #include "cuda_runtime.h" 
 #include "device_launch_parameters.h" 
-#include "cudaTensorCoreGemm.cuh" 
+#include "cudaTensorCoreGemm.cuh"
 
 extern "C" {
 	#include "layer_gpu.cuh" 
@@ -89,62 +90,100 @@ __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* ou
 	outputs->arr[ndarray_index(outputs, outputs_index)] = result;
 }
 
+void layer_dense_feedforward_gpu_setup_normal(layer* input_layer, layer* dense_layer) {
+	// Max thread count 
+	cudaDeviceProp prop;
+	cudaGetDeviceProperties(&prop, 0);
+	int max_threads_per_block = prop.maxThreadsPerBlock;
+
+	// Move outputs to the host
+	ndarray* h_outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost);
+
+	// Move inputs to the host
+	ndarray* h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
+
+	int things_to_process = h_outputs->shape[1];
+	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process;
+	int blocks = things_to_process / threads + 1;
+
+	layer_dense_feedforward_gpu << <blocks, threads >> > (
+		input_layer->outputs, dense_layer->outputs, dense_layer->weights, blocks, threads);
+	if (cudaGetLastError() != cudaSuccess) {
+		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
+		exit(1);
+	}
+	cudaDeviceSynchronize();
+
+	switch (dense_layer->activation) {
+		case layer_activation_relu:
+			layer_dense_gpu_relu_device << <1, 1 >> > (dense_layer->outputs);
+			break;
+
+		case layer_activation_softmax:
+			layer_dense_gpu_divsum_device << <1, 1 >> > (dense_layer->outputs);
+			break;
+
+		default:
+			fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation);
+			exit(1);
+	}
+	
+	if (cudaGetLastError() != cudaSuccess) {
+		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
+		exit(1);
+	}
+	cudaDeviceSynchronize();
+
+	ndarray_free(h_outputs);
+	ndarray_free(h_inputs);
+}
+
+void layer_dense_feedforward_gpu_setup_tensorcore(layer* input_layer, layer* dense_layer) {
+	ndarray* input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray** weight_set = layer_copy_weights(dense_layer, cudaMemcpyDeviceToHost);
+	ndarray* weights = weight_set[0];
+	ndarray* biases = weight_set[1];
+
+	int shape[2] = { 1, weights->shape[1] };
+	ndarray* output = ndarray_create(2, shape);
+
+	for (int i = 0; i < output->count; i++)
+		output->arr[i] = 0;
+
+	matrix_multiply(input, weights, biases, output);
+
+	switch (dense_layer->activation) {
+	case layer_activation_relu:
+		layer_dense_gpu_relu(output);
+		break;
+
+	case layer_activation_softmax:
+		layer_dense_gpu_divsum(output);
+		break;
+
+	default:
+		fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation);
+		exit(1);
+	}
+
+	dense_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice);
+	ndarray_free(input);
+	ndarray_free(weights);
+	ndarray_free(biases);
+	ndarray_free(output);
+}
+
 __host__ void layer_dense_feedforward_gpu_setup(layer* input_layer, layer* dense_layer) {
-	printf("--Dense\n"); 
-	
-	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
-	ndarray **weight_set = layer_copy_weights(dense_layer, cudaMemcpyDeviceToHost); 
-	ndarray *weights = weight_set[0]; 
-	ndarray *biases = weight_set[1]; 
-	ndarray *output = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost); 
-	
-	//invoke_beginning(input, weights, biases, output); 
-	matrix_multiply(input, weights, biases, output); 
-	
-//	dense_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
-//
-//	// Max thread count 
-//	cudaDeviceProp prop;
-//	cudaGetDeviceProperties(&prop, 0);
-//	int max_threads_per_block = prop.maxThreadsPerBlock;
-//
-//	// Move outputs to the host
-//	ndarray *h_outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost);
-//
-//	// Move inputs to the host
-//	ndarray *h_inputs = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
-//
-//	int things_to_process = h_outputs->shape[1];
-//	int threads = things_to_process > max_threads_per_block ? max_threads_per_block : things_to_process;
-//	int blocks = things_to_process / threads + 1;
-//	
-//	matrix_multiply(h_inputs, h_outputs, NULL, NULL); 
-//
-//	layer_dense_feedforward_gpu<<<blocks, threads>>>(
-//		input_layer->outputs, dense_layer->outputs, dense_layer->weights, blocks, threads);
-//	if (cudaGetLastError() != cudaSuccess) {
-//		printf("Error in kernel execution: %s\n", cudaGetErrorString(cudaGetLastError()));
-//		exit(1);
-//	}
-//	cudaDeviceSynchronize();
-//
-//	switch (dense_layer->activation) {
-//		case layer_activation_relu: 
-//			layer_dense_gpu_relu<<<1,1>>>(dense_layer->outputs); 
-//			break; 
-//		
-//		case layer_activation_softmax: 
-//			layer_dense_gpu_divsum<<<1,1>>>(dense_layer->outputs); 
-//			break; 
-//			
-//		default: 
-//			fprintf(stderr, "Error: unrecognized activation function: %d\n", dense_layer->activation); 
-//			exit(1); 
-//	}
+	printf("--Dense\n");
+
+#ifdef TENSORCORE
+	layer_dense_feedforward_gpu_setup_tensorcore(input_layer, dense_layer); 
+#else 
+	layer_dense_feedforward_gpu_setup_normal(input_layer, dense_layer); 
+#endif 
 }
 
 __global__ void layer_dense_feedforward_gpu(ndarray* inputs, ndarray* outputs, ndarray** weight_set, int blocks, int threads) {
-	// TODO: assuming it will always be 1024. 
 	ndarray *weights = weight_set[0];
 	ndarray *biases = weight_set[1];
 
@@ -163,7 +202,22 @@ __global__ void layer_dense_feedforward_gpu(ndarray* inputs, ndarray* outputs, n
 	}
 }
 
-__global__ void layer_dense_gpu_divsum(ndarray* dense) {
+// TODO: don't copy functions, find a better solution.
+__global__ void layer_dense_gpu_divsum_device(ndarray* dense) {
+	ND_TYPE sum = 0;
+	for (int i = 0; i < dense->shape[1]; i++)
+		sum += expf(dense->arr[i]);
+
+	for (int i = 0; i < dense->shape[1]; i++)
+		dense->arr[i] = expf(dense->arr[i]) / sum;
+}
+
+__global__ void layer_dense_gpu_relu_device(ndarray* dense) {
+	for (int i = 0; i < dense->shape[1]; i++)
+		dense->arr[i] = fmaxf(dense->arr[i], 0);
+}
+
+void layer_dense_gpu_divsum(ndarray* dense) {
 	ND_TYPE sum = 0; 
 	for (int i = 0; i < dense->shape[1]; i++)
 		sum += expf(dense->arr[i]);
@@ -172,26 +226,7 @@ __global__ void layer_dense_gpu_divsum(ndarray* dense) {
 		dense->arr[i] = expf(dense->arr[i]) / sum; 
 }
 
-__global__ void layer_dense_gpu_relu(ndarray* dense) {
+void layer_dense_gpu_relu(ndarray* dense) {
 	for (int i = 0; i < dense->shape[1]; i++)
 		dense->arr[i] = fmaxf(dense->arr[i], 0); 
-}
-
-__device__ ND_TYPE layer_activation(ND_TYPE* value, enum layer_activation activation) {
-	switch (activation) {
-		case layer_activation_relu:
-			return layer_relu(value); 
-		case layer_activation_softmax: 
-			return layer_softmax(value); 
-		default: 
-			return 0; 
-	}
-} 
-
-__device__ ND_TYPE layer_relu(ND_TYPE* value) { 
-	return fmaxf(*value, 0);
-}
-
-__device__ ND_TYPE layer_softmax(ND_TYPE* value) {
-	return expf(value[0]) / value[1];
 }

@@ -10,7 +10,7 @@ float rand_float(int min, int max) {
 	return (float)rand() / (float)(RAND_MAX / (max - min)) + min;
 }
 
-int main() {
+int main_old() {
 	const int input_size = 4000; 
 	const int output_size = 1000;
 	printf("input_size: %d, output_size: %d\n", input_size, output_size); 

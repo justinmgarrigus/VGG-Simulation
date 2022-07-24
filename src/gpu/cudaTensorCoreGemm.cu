@@ -500,11 +500,9 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
         k_padding = k_tiles - k_shape,
         n_padding = n_tiles - n_shape;
 		
-	int m_global = M * m_tiles,
-		k_global = K * k_tiles, 
-		n_global = N * n_tiles; 
-
-    printf("M: %d, K: %d, N: %d\n", m_tiles, k_tiles, n_tiles);
+    int m_global = M * m_tiles,
+        k_global = K * k_tiles,
+        n_global = N * n_tiles;
 
     // Convert into equivalent arrays. 
     half* A = (half*)malloc(sizeof(half) * m_global * k_global);
@@ -529,7 +527,7 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
             B[i + j * n_global] = (half)0.0; 
     }
 
-    for (int i = 0; i < h_C->shape[1]; i++)
+    for (int i = 0; i < h_C->count; i++)
         C[i] = (float)h_C->arr[i];
 	
     half* d_A; checkCudaErrors(cudaMalloc(&d_A, sizeof(half) * m_global * k_global));
