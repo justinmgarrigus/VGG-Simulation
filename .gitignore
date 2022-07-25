@@ -2,3 +2,4 @@ obj/
 bin/
 data/*.nn
 *.out
+*__pycache__*

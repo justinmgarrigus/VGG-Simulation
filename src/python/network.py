@@ -11,8 +11,13 @@ import pandas
 import random
 import math 
 import os 
+import timer 
 
 np.random.seed(1000)
+
+use_tensorcore = False # Note: doesn't actually use tensorcores, just does matrix multiplication instead 
+override_probability = True # If true, the entire calculation is performed for each layer; if false, a fraction of the calculation is performed.
+check_accuracy = False # If true, calculated values are compared with the values we should have calculated. 
 
 magic_number = 1234 
 layer_types = {'InputLayer': 0, 'Conv2D': 1, 'MaxPooling2D': 2, 'Flatten': 3, 'Dense': 4, 'BatchNormalization': 5} 
@@ -326,50 +331,60 @@ def softmax(X):
 
 
 def conv_2D(layer, inputs):
-	print('Conv 2D') 
-	epsilon = 0.01 # Accepted error 
-	iters_per_second = 1000 
-	total_seconds = 60 
-	total_iters = iters_per_second * total_seconds 
+	print('Conv 2D ', end='', flush=True) 
+	epsilon = 0.01 # Accepted error  
 	
-	# Actual output 
+	# Actual output
 	outputs = layer(inputs) 
 	outputnp = outputs.numpy()
+	inputsnp = inputs.numpy() 
 	
 	# Probability of replacing an actual output
-	iters = outputs.shape[1] * outputs.shape[2] * outputs.shape[3] * inputs.shape[3] * layer.kernel_size[0] * layer.kernel_size[1] 
-	probability = total_iters / iters
+	if not override_probability:
+		iters_per_second = 1000 
+		total_seconds = 60 
+		total_iters = iters_per_second * total_seconds
+		iters = outputs.shape[1] * outputs.shape[2] * outputs.shape[3] * inputsnp.shape[3] * layer.kernel_size[0] * layer.kernel_size[1] 
+		probability = total_iters / iters
 	
 	# Add padding so output is the same size as input 
 	if layer.padding == 'same': 
 		pad = (layer.kernel_size[0] - 1) // 2
-		inputs = np.pad(inputs, [(0, 0), (pad, pad), (pad, pad), (0, 0)], mode='constant') # count, x, y, channel
+		inputsnp = np.pad(inputsnp, [(0, 0), (pad, pad), (pad, pad), (0, 0)], mode='constant') # count, x, y, channel
 	
 	kernel = layer.kernel.numpy() 
 	weights = layer.weights[1].numpy() 
+	kernel_size = (layer.kernel_size[0], layer.kernel_size[1]) 
+	strides = (layer.strides[0], layer.strides[1]) 
 	
-	for x in range(outputs.shape[1]):
-		for y in range(outputs.shape[2]):
+	timer.start() 
+	
+	for x in range(outputnp.shape[1]):
+		for y in range(outputnp.shape[2]):
 			result = 0 
-			for filter_index in range(outputs.shape[3]): 
-				# Chance of replacing expected value with custom calculated value 
-				if random.random() < probability: 
+			for filter_index in range(outputnp.shape[3]): 
+				# Chance of replacing expected value with custom calculated value
+				if override_probability or random.random() < probability: 
 					result = weights[filter_index]
-					for kernel_x in range(layer.kernel_size[0]): 
-						for kernel_y in range(layer.kernel_size[1]): 
-							for channel in range(inputs.shape[3]): 
-								result += kernel[kernel_x][kernel_y][channel][filter_index] * inputs[0][x * layer.strides[0] + kernel_x][y * layer.strides[1] + kernel_y][channel]
+					for kernel_x in range(kernel_size[0]): 
+						for kernel_y in range(kernel_size[1]): 
+							for channel in range(inputsnp.shape[3]): 
+								result += kernel[kernel_x][kernel_y][channel][filter_index] * inputsnp[0][x * strides[0] + kernel_x][y * strides[1] + kernel_y][channel]
 					if result < 0: result = 0 
 					
-					# Compare expected vs actual value, exit if difference is too large 
-					expected = outputnp[0][x][y][filter_index] 
-					diff = abs(result - expected) 
-					if diff > epsilon:
-						print('Convolution incorrect!', result, expected, diff)
-						sys.exit(0) 
+					if check_accuracy: 
+						# Compare expected vs actual value, exit if difference is too large 
+						expected = outputnp[0][x][y][filter_index] 
+						diff = abs(result - expected) 
+						if diff > epsilon:
+							print('Convolution incorrect!', result, expected, diff)
+							sys.exit(0) 
 						
 					# Replace output with our own calculated value
 					outputnp[0][x][y][filter_index] = result
+	
+	timer.stop() 
+	print(timer.elapsed()) 
 	
 	# Replace with required data type 
 	eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)
@@ -377,7 +392,7 @@ def conv_2D(layer, inputs):
 
 
 def batch_normalization(layer, inputs):
-	print("Batch normalization")
+	print('Batch normalization ', end='', flush=True)
 	outputs = layer(inputs)
 	outputsnp = outputs.numpy()
 	
@@ -386,12 +401,16 @@ def batch_normalization(layer, inputs):
 	running_mean = layer.weights[2].numpy() 
 	running_std = layer.weights[3].numpy()
 	
-	probability = (outputsnp.size / inputs.shape[3] * 30) / outputsnp.size 
+	if not override_probability: 
+		probability = (outputsnp.size / inputs.shape[3] * 30) / outputsnp.size 
 	
 	result = np.empty(shape=inputs.shape) 
 	it = np.ndindex(result.shape) 
+	
+	timer.start() 
+	
 	for i in range(outputsnp.size // inputs.shape[3]):
-		if random.random() < probability: 
+		if override_probability or random.random() < probability: 
 			for f in range(inputs.shape[3]): 
 				index = next(it)
 				result[index] = gamma[f] * (inputs[index] - running_mean[f]) / math.sqrt(running_std[f] + layer.epsilon) + beta[f]
@@ -400,23 +419,29 @@ def batch_normalization(layer, inputs):
 				index = next(it) 
 				result[index] = outputsnp[index] 
 	
-	# Verify average difference is less than 0.01 
-	diff = 0 
-	for x in np.ndindex(result.shape):
-		diff += abs(result[x] - outputsnp[x]) 
-	error = diff / outputsnp.size / probability
-	if error > 0.01: 
-		print('BatchNormalization error too high!', error)
-		sys.exit(0) 
+	timer.stop() 
+	print(timer.elapsed()) 
+	
+	if check_accuracy: 
+		# Verify average difference is less than 0.01 
+		diff = 0 
+		for x in np.ndindex(result.shape):
+			diff += abs(result[x] - outputsnp[x]) 
+		error = diff / outputsnp.size / probability
+		if error > 0.01: 
+			print('BatchNormalization error too high!', error)
+			sys.exit(0) 
 	
 	return tf.convert_to_tensor(result, dtype=np.float32)
 
 
 def max_pooling(layer, inputs):
-	print('Max pooling') 
+	print('Max pooling ', end='', flush=True) 
 	outputs = layer(inputs)
 	inputsnp = inputs.numpy()
 	outputsnp = outputs.numpy()
+	
+	timer.start() 
 	
 	for offset_x in range (0, inputsnp.shape[1], 2):
 		for offset_y in range (0, inputsnp.shape[2], 2):
@@ -434,37 +459,48 @@ def max_pooling(layer, inputs):
 				if outputsnp.shape[1] > x and outputsnp.shape[2] > y: 
 					outputsnp[0][x][y][z] = max_value
 
+	timer.stop() 
+	print(timer.elapsed()) 
+
 	eager_tensor = tf.convert_to_tensor(outputsnp, dtype=np.float32)
 	return eager_tensor
 
 
 def flatten(layer, inputs):
-	print('Flatten') 
-	result_array = np.empty(shape=none_tuple_replace(layer.output_shape)) 
-	i = 0 
+	print('Flatten ', end='', flush=True) 
+	result_array = np.empty(shape=none_tuple_replace(layer.output_shape))  
+	
+	timer.start() 
+	
+	i = 0
 	for x in np.nditer(inputs.numpy()): 
 		result_array[0][i] = x
 		i += 1
+	
+	timer.stop() 
+	print(timer.elapsed()) 
+	
 	eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
 	return eager_tensor 
 
 
 def dense(layer, inputs):
-	print('Dense')
+	print('Dense ', end='', flush=True)
 	inputsnp = inputs.numpy()
 	weightsnp = layer.get_weights()[0]
 	biasnp = layer.get_weights()[1] 
 	
-	print('Input shape:', inputs.numpy().shape) 
-	print('Weights shape:', weightsnp.shape) 
-	print('Biases shape:', biasnp.shape) 
-	result_array = np.matmul(inputs.numpy(), weightsnp) 
-	result_array += biasnp 
+	timer.start() 
 	
-	print('Outputs shape:', result_array.shape) 
-	# m = 1			inputs.shape[0] 
-	# k = 25088 	inputs.shape[1] 
-	# n = 4096 		weights.shape[1] 
+	if use_tensorcore: 
+		result_array = np.matmul(inputs.numpy(), weightsnp) 
+		result_array += biasnp 
+	else: 
+		result_array = np.reshape(np.copy(biasnp), newshape=(1, biasnp.shape[0]))
+		for i in range(len(inputsnp)):
+			for j in range(len(weightsnp[0])):
+				for k in range(len(weightsnp)):
+					result_array[i][j] += inputsnp[i][k] * weightsnp[k][j] 
 	
 	if ('relu' in str(layer.activation)):
 		result_array = relu(result_array)
@@ -473,6 +509,9 @@ def dense(layer, inputs):
 	else: 
 		print('Unrecognized activation function:', layer.activation)
 		sys.exit(0)   
+		
+	timer.stop() 
+	print(timer.elapsed()) 
 
 	eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
 	return eager_tensor
@@ -521,6 +560,9 @@ def feedforward(model, image):
 		else: 
 			print('Unrecognized layer:', name)
 			sys.exit(0)
+	
+	print('\nTotal elapsed time in feedforward:', round(timer.elapsed(), 2)) 
+	
 	return x 
 
 
@@ -563,6 +605,8 @@ if __name__ == '__main__':
 	if name == 'alexnet': model = create_alexnet(train)
 	elif name == 'vgg16': model = create_vgg16(train) 
 	else: model = create_lenet(train) 
+	
+	model.summary() 
 	
 	if not train: 
 		if name == 'vgg16': test_files = ['dog.jpg'] 
