@@ -166,6 +166,18 @@ ndarray* ndarray_copy(ndarray* base, enum cudaMemcpyKind kind) {
 		cudaMemcpy(new_nd, nd, sizeof(ndarray), kind); 
 		free(nd); 
 	}
+	else if (kind == cudaMemcpyHostToHost) {
+		ndarray *nd = (ndarray*)malloc(sizeof(ndarray));
+		nd->dim = base->dim; 
+		nd->shape = (int*)malloc(sizeof(int) * nd->dim); 
+		memcpy(nd->shape, base->shape, sizeof(int) * nd->dim);
+		nd->count = base->count; 
+		nd->cumulative = (int*)malloc(sizeof(int) * nd->dim); 
+		memcpy(nd->cumulative, base->cumulative, sizeof(int) * nd->dim); 
+		nd->arr = (ND_TYPE*)malloc(sizeof(ND_TYPE) * nd->count); 
+		memcpy(nd->arr, base->arr, sizeof(ND_TYPE) * nd->count); 
+		new_nd = nd; 
+	}
 	
 	return new_nd;
 }
@@ -264,4 +276,11 @@ void ndarray_fprint(ndarray* arr, FILE* file) {
 	for (int i = 0; i < arr->dim-1; i++) 
 		fprintf(file, "%d, ", arr->shape[i]);
 	fprintf(file, "%d]", arr->shape[arr->dim-1]); 
+}
+
+ND_TYPE ndarray_entropy(ndarray* nd) { 
+	ND_TYPE sum = 0; 
+	for (int i = 0; i < nd->count; i++)
+		sum += nd->arr[i]; 
+	return sum; 
 }

@@ -3,6 +3,7 @@
 #include "cuda_runtime.h" 
 #include "device_launch_parameters.h" 
 #include "cudaTensorCoreGemm.cuh"
+#include "io.h" 
 
 extern "C" {
 	#include "layer_gpu.cuh" 
@@ -16,7 +17,7 @@ __device__ int ndarray_index(ndarray* nd, int* pos) {
 	return index;
 }
 
-__host__ void layer_convolutional_feedforward_gpu_setup(layer* input_layer, layer* conv_layer) {
+__host__ void layer_convolutional_feedforward_gpu_setup_normal(layer* input_layer, layer* conv_layer) {
 	// Max thread count 
 	cudaDeviceProp prop; 
 	cudaGetDeviceProperties(&prop, 0); 
@@ -43,7 +44,6 @@ __host__ void layer_convolutional_feedforward_gpu_setup(layer* input_layer, laye
 	// Move back to the device
 	ndarray *d_inputs = ndarray_copy(h_inputs_padded, cudaMemcpyHostToDevice);
 	
-	printf("--Conv2D (%d, %d)\n", blocks, threads); 
 	layer_convolutional_feedforward_gpu<<<blocks, threads>>>(
 		d_inputs, conv_layer->outputs, conv_layer->weights, blocks, threads); 
 	if (cudaGetLastError() != cudaSuccess) {
@@ -55,7 +55,119 @@ __host__ void layer_convolutional_feedforward_gpu_setup(layer* input_layer, laye
 	ndarray_free(h_outputs); 
 	ndarray_free(h_inputs);
 	ndarray_free(h_inputs_padded);
-	ndarray_free_gpu(d_inputs); 
+	ndarray_free_gpu(d_inputs);
+}
+
+__host__ void layer_convolutional_feedforward_gpu_setup_tensorcore(layer* input_layer, layer* conv_layer) {
+	ndarray* h_input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost);
+	ndarray** h_weight_set = layer_copy_weights(conv_layer, cudaMemcpyDeviceToHost);
+	ndarray* h_kernel = h_weight_set[0]; 
+	ndarray* h_bias = h_weight_set[1]; 
+	
+	// Pad input array
+ 	int padding[4] = {0, 1, 1, 0};
+	ndarray *h_inputs_padded = ndarray_pad(h_input, padding, 1);
+//	ndarray *h_inputs_padded = ndarray_copy(h_input, cudaMemcpyHostToHost); 
+	
+	// Convert h_input to an image2col representation
+	int kernel_length = h_kernel->shape[0]; 
+	int padding_amount = 0; // TODO: should be variable. 
+	int stride_amount = 1; // stride_flag == 1 ? 4 : 1;  // TODO: should be variable. 
+//	stride_flag = 0; 
+	
+	int width = floor(((h_inputs_padded->shape[1] + 2*padding_amount - kernel_length) / stride_amount) + 1); 
+	int height = floor(((h_inputs_padded->shape[2] + 2*padding_amount - kernel_length) / stride_amount) + 1); 
+	int cols_shape[2] = { width * height, h_inputs_padded->shape[3] * kernel_length * kernel_length }; 
+	ndarray *cols = ndarray_create(2, cols_shape);
+
+	printf("Cols dimension: %d, %d\n", cols_shape[0], cols_shape[1]); 
+	
+	int iter_shape[3] = { h_kernel->shape[2], h_kernel->shape[0], h_kernel->shape[1] }; 
+	int pos[3]; 
+	for (int vec_index = 0; vec_index < cols->shape[0]; vec_index++) {
+		memset(pos, 0, sizeof(int) * 3); 
+		int col_index = 0;
+		int kernel_x = vec_index / height * stride_amount; 
+		int kernel_y = vec_index % width  * stride_amount; 
+		do { 
+			float value = ndarray_get_val_param(h_inputs_padded, 0, kernel_x + pos[1], kernel_y + pos[2], pos[0]); 
+			ndarray_set_val_param(cols, value, vec_index, col_index++);  
+		}
+		while (ndarray_decimal_count(3, pos, iter_shape));
+	}
+	
+	// Convert h_kernel into an image2col representation
+	int kernel_col_shape[2] = { h_kernel->shape[0] * h_kernel->shape[1] * h_kernel->shape[2], h_kernel->shape[3] }; 
+	ndarray *kernel_col = ndarray_create(2, kernel_col_shape);
+	
+	for (int c = 0; c < kernel_col->shape[1]; c++) {
+		memset(pos, 0, sizeof(int) * 3); 
+		int col_index = 0; 
+		do {
+			float value = ndarray_get_val_param(h_kernel, pos[1], pos[2], pos[0], c); 
+			ndarray_set_val_param(kernel_col, value, col_index++, c);  
+		}
+		while (ndarray_decimal_count(3, pos, iter_shape));
+	}
+	
+	// Create bias array (to simplify matrix multiplication)
+	int bias_col_shape[2] = { cols->shape[0], kernel_col->shape[1] };
+	ndarray *bias_col = ndarray_create(2, bias_col_shape); 
+	for (int i = 0; i < bias_col->shape[0]; i++)
+		for (int j = 0; j < bias_col->shape[1]; j++)
+			ndarray_set_val_param(bias_col, h_bias->arr[j], i, j);
+			
+	// Multiply img2col input by img2col kernel 
+	int output_col_shape[2] = { cols->shape[0], kernel_col->shape[1] }; 
+	ndarray *output_col = ndarray_create(2, output_col_shape);
+	matrix_multiply(cols, kernel_col, bias_col, output_col); 
+	
+	// Perform the activation function (relu) 
+	for (int i = 0; i < output_col->count; i++) {
+		if (output_col->arr[i] < 0) 
+			output_col->arr[i] = 0; 
+	}
+	
+	// Convert output (2D) back into a 4D matrix
+	int length = (int)sqrt(output_col->shape[0]); 
+	int output_shape[4] = { 1, length, length, output_col->shape[1] }; 
+	ndarray *output = ndarray_create(4, output_shape); 
+	
+	for (int filter_index = 0; filter_index < output_col->shape[1]; filter_index++) {
+		for (int i = 0; i < output_col->shape[0]; i++) { 
+			float value = ndarray_get_val_param(output_col, i, filter_index); 
+			ndarray_set_val_param(output, value, 0, i / length, i % length, filter_index); 
+		}
+	}
+	
+	conv_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice);
+	
+	printf("Entropy:\n"); 
+	printf("  cols: %f\n", ndarray_entropy(cols)); 
+	printf("  kernel_col: %f\n", ndarray_entropy(kernel_col)); 
+	printf("  output_col: %f\n", ndarray_entropy(output_col)); 
+	printf("  output: %f\n", ndarray_entropy(output)); 
+	
+	ndarray_free(h_input); 
+	free(h_weight_set); 
+	ndarray_free(h_kernel); 
+	ndarray_free(h_bias); 
+	ndarray_free(h_inputs_padded); 
+	ndarray_free(cols); 
+	ndarray_free(kernel_col); 
+	ndarray_free(bias_col); 
+	ndarray_free(output_col);
+	ndarray_free(output);
+}
+
+__host__ void layer_convolutional_feedforward_gpu_setup(layer* input_layer, layer* conv_layer) {
+	printf("--Conv2D\n"); 
+//	layer_convolutional_feedforward_gpu_setup_normal(input_layer, conv_layer); 
+#ifdef TENSORCORE
+	layer_convolutional_feedforward_gpu_setup_tensorcore(input_layer, conv_layer); 
+#else 
+	layer_convolutional_feedforward_gpu_setup_normal(input_layer, conv_layer); 
+#endif 
 }
 
 __global__ void layer_convolutional_feedforward_gpu(ndarray* inputs, ndarray* outputs, ndarray** weights, int blocks, int threads) {
@@ -175,12 +287,13 @@ void layer_dense_feedforward_gpu_setup_tensorcore(layer* input_layer, layer* den
 
 __host__ void layer_dense_feedforward_gpu_setup(layer* input_layer, layer* dense_layer) {
 	printf("--Dense\n");
-
-#ifdef TENSORCORE
-	layer_dense_feedforward_gpu_setup_tensorcore(input_layer, dense_layer); 
-#else 
+	
 	layer_dense_feedforward_gpu_setup_normal(input_layer, dense_layer); 
-#endif 
+//#ifdef TENSORCORE
+//	layer_dense_feedforward_gpu_setup_tensorcore(input_layer, dense_layer); 
+//#else 
+//	layer_dense_feedforward_gpu_setup_normal(input_layer, dense_layer); 
+//#endif 
 }
 
 __global__ void layer_dense_feedforward_gpu(ndarray* inputs, ndarray* outputs, ndarray** weight_set, int blocks, int threads) {

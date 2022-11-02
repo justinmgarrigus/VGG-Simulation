@@ -28,5 +28,6 @@ void ndarray_deep_display(ndarray* nd);
 void ndarray_log(ndarray* nd, char* file_name);
 int ndarray_decimal_count(int length, int* counter, int* shape);
 void ndarray_fprint(ndarray* arr, FILE* file); 
+ND_TYPE ndarray_entropy(ndarray* arr); 
 
 #endif 

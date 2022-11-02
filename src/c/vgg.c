@@ -46,8 +46,8 @@ void alexnet_image(char* file_name, ndarray* input) {
 }
 
 int main(int argc, char** argv) {
-	if (argc != 2 ) {
-		printf("Format: ./vgg <model> <network.nn> <labels.json> [<image.img>]\n"); 
+	if (argc < 2 || argc > 3) {
+		printf("Format: ./vgg <model> [<image.jpg>]\n"); 
 		printf("  Model types: -vgg16 -alexnet\n");  
 		exit(1); 
 	}
@@ -87,8 +87,8 @@ int main(int argc, char** argv) {
 		input = ndarray_create(4, length); 
 	}
 	
-	if (argc == 4) {
-		preprocess(argv[3], input); 
+	if (argc == 3) {
+		preprocess(argv[2], input); 
 	
 		network_feedforward(network, input); printf("\n");
 		network_decode_output(network); 
@@ -97,8 +97,9 @@ int main(int argc, char** argv) {
 		printf("\n\n"); 
 		while (1) {
 			char file_name[256]; 
-			printf("Enter a file name or 'quit': "); 
-			scanf("%s", file_name); 
+			printf("Enter a file name or 'quit': dog.jpg\n"); 
+			// scanf("%s", file_name); 
+			sprintf(file_name, "dog.jpg"); 
 			
 			if (strcmp(file_name, "quit") == 0) 
 				break; 
@@ -114,6 +115,8 @@ int main(int argc, char** argv) {
 			preprocess(buffer, input); 
 			network_feedforward(network, input); printf("\n"); 
 			network_decode_output(network); printf("\n\n"); 
+			
+			break; 
 		}
 	}
 	

@@ -60,117 +60,15 @@
  // - Note that the CTA tile size is chosen to maximize the GPU register
  //   utilization, but carefully enough to avoid local memory use.
 
-#include <assert.h>
-#include <cuda.h>
-#include <mma.h>
-#include <stdio.h>
-
-// helper functions and utilities to work with CUDA
-#include <helper_cuda.h>
-#include <helper_functions.h>
-
-extern "C" {
+// TODO: includes were here, but were moved to cudaTensorCoreGemm.cuh to make 
+// porting a bit easier. The includes should probably stay in here in the future.
 #include "cudaTensorCoreGemm.cuh"
-}
-
-// Externally configurable parameters.
-
-#ifndef CPU_DEBUG
-// Set this to 1 to verify the correctness of the GPU-computed matrix.
-#define CPU_DEBUG 1
-#endif
-
-#ifndef SHARED_MEMORY_LIMIT_64K
-// Set this to 0 to use more than 64 Kb of shared memory to cache data, to
-// improve the performance of the computations on GPU.
-// Note that you need a GPU that can have more than 64 Kb of shared memory
-// per multiprocessor.
-#define SHARED_MEMORY_LIMIT_64K 1
-#endif
-
-// GPU configuration.
-
-#define WARP_SIZE 32
-
-// MMA matrix tile dimensions.
-
-#define M 16
-#define N 16
-#define K 16
-
-#define WMMA_M 16
-#define WMMA_N 16
-#define WMMA_K 16
-
-// GEMM configuration.
-
-#define C_LAYOUT wmma::mem_row_major
-
-// Implementation constants.
-
-#define WARPS_PER_BLOCK 8
-#define THREADS_PER_BLOCK (WARP_SIZE * WARPS_PER_BLOCK)
-
-#if SHARED_MEMORY_LIMIT_64K
-// With only 64 Kb shared memory available, we can fit two 8-tile chunks of
-// the A and B matrix data, that are 16 * 16 * 8 * 8 * 2 = 32 Kb each
-// (i.e. two 8x8 arrays of tiles of 16x16 half-typed elements per CTA).
-// But we cannot account the 8 Kb total skew overhead, without which the
-// performance would be severely impacted. So we choose to reduce the chunk size
-// in half, i.e. the amount of A and B matrix data we cache in shared memory.
-// Accordingly, this doubles the number of outer iterations across the global K
-// dimension, which only slightly impacts the performance.
-#define CHUNK_K 4
-#else
-#define CHUNK_K 8
-#endif
-
-#define CHUNK_LINE_BYTES (CHUNK_K * K * sizeof(half))
-#define WARP_COPY_BYTES (WARP_SIZE * sizeof(int4))
-#define CHUNK_COPY_LINES_PER_WARP (WARP_COPY_BYTES / CHUNK_LINE_BYTES)
-#define CHUNK_COPY_LINE_LANES (WARP_SIZE / CHUNK_COPY_LINES_PER_WARP)
-
-#define BLOCK_ROW_WARPS 2
-#define BLOCK_COL_WARPS 4
-
-#define WARP_ROW_TILES 4
-#define WARP_COL_TILES 2
-
-#define BLOCK_ROW_TILES (WARP_ROW_TILES * BLOCK_ROW_WARPS)
-#define BLOCK_COL_TILES (WARP_COL_TILES * BLOCK_COL_WARPS)
-
-#define GLOBAL_MEM_STRIDE N_GLOBAL
-
-#define SHMEM_STRIDE (N * BLOCK_ROW_TILES)
-#define SHMEM_OFFSET (N * WARP_ROW_TILES)
-
-// The macro below is used to shift rows of the A matrix and columns of the B matrix
-// in shared memory to minimize possible bank conflicts.
-// Before performing the nvcuda::wmma::mma_sync operation, the warp must load the matrix
-// data using the nvcuda::wmma::load_matrix_sync operation. Although the memory access pattern
-// is not specified for that function, each lane in the warp can read one or multiple matrix
-// elements from different matrix rows or columns.
-// For shared memory, such access can result in bank conflicts if different rows / columns
-// of the matrix map to the same bank. By shifting each row and column by a few bytes, we
-// make sure that they map to different banks, thus reducing the number of possible bank
-// conflicts.
-// The number of 16 two-byte "half" elements is chosen as the minimum possible shift because
-// we must keep each row and column 256-bit aligned, as required by nvcuda::wmma::load_matrix_sync.
-#define SKEW_HALF 16
-
-#define checkKernelErrors(expr)                             \
-  do {                                                      \
-    expr;                                                   \
-                                                            \
-    cudaError_t __err = cudaGetLastError();                 \
-    if (__err != cudaSuccess) {                             \
-      printf("Line %d: '%s' failed: %s\n", __LINE__, #expr, \
-             cudaGetErrorString(__err));                    \
-      abort();                                              \
-    }                                                       \
-  } while (0)
 
 using namespace nvcuda;
+
+#if defined(SAVE_INTERMEDIATE) 
+	int conv_layer_counter = 1; 
+#endif 
 
 __host__ void init_host_matrices(half* a, half* b, float* c) {
 //    for (int i = 0; i < M_GLOBAL; i++) {
@@ -458,25 +356,55 @@ int pad_multiple(int value, int multiple) {
 }
 
 __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
+	printf("Matrix multiply\n"); 
+	
     // Assumption: since compute_gemm considers B to be col-wise (which doesn't work 
     // for our purposes), we need to transpose it. Thus, B must be square!
-    // Constraint: input_size (h_A->shape[1]) > output_size (h_B->shape[1])
-    bool reformatted_b_matrix = h_B->shape[0] != h_B->shape[1]; 
-    if (reformatted_b_matrix) {
-        const int input_size = h_A->shape[1],
-            output_size = h_B->shape[1];
-
-        int reformat_shape[2] = { input_size, input_size };
-        ndarray* b_reformatted = ndarray_create(2, reformat_shape);
-
-        for (int r = 0; r < input_size; r++) {
-            for (int c = 0; c < output_size; c++)
-                b_reformatted->arr[r * input_size + c] = h_B->arr[r * output_size + c];
-            for (int c = output_size; c < input_size; c++)
-                b_reformatted->arr[r * input_size + c] = 0;
-        }
-
-        h_B = b_reformatted; 
+	// If these are reshaped, then a_reformatted and b_reformatted will not be null.  
+	ndarray *b_reformatted = nullptr;
+	ndarray *a_reformatted = nullptr; 
+    if (h_B->shape[0] != h_B->shape[1]) {
+		if (h_B->shape[0] > h_B->shape[1]) {
+			// Resize B to be square based on the size of h_B->shape[0]
+			const int input_size = h_A->shape[1];
+			const int output_size = h_B->shape[1];
+	
+			int reformat_shape[2] = { input_size, input_size };
+			b_reformatted = ndarray_create(2, reformat_shape);
+	
+			for (int r = 0; r < input_size; r++) {
+				for (int c = 0; c < output_size; c++)
+					b_reformatted->arr[r * input_size + c] = h_B->arr[r * output_size + c];
+				for (int c = output_size; c < input_size; c++)
+					b_reformatted->arr[r * input_size + c] = 0;
+			}
+			
+			h_B = b_reformatted;
+		}
+		else {
+			// Resize B to be square based on the size of h_B->shape[1]
+			int b_reformat_shape[2] = { h_B->shape[1], h_B->shape[1] }; 
+			b_reformatted = ndarray_create(2, b_reformat_shape);
+			
+			for (int i = 0; i < h_B->count; i++) 
+				b_reformatted->arr[i] = h_B->arr[i]; 
+			for (int i = h_B->count; i < b_reformatted->count; i++) 
+				b_reformatted->arr[i] = 0;
+			
+			// Resize A to align with B's new size
+			int a_reformat_shape[2] = { h_A->shape[0], h_B->shape[1] };
+			a_reformatted = ndarray_create(2, a_reformat_shape);
+	
+			for (int r = 0; r < h_A->shape[0]; r++) {
+				for (int c = 0; c < h_A->shape[1]; c++)
+					a_reformatted->arr[r * a_reformatted->shape[1] + c] = h_A->arr[r * h_A->shape[1] + c];
+				for (int c = h_A->shape[1]; c < a_reformatted->shape[1]; c++)
+					a_reformatted->arr[r * a_reformatted->shape[1] + c] = 0;
+			}
+			
+			h_B = b_reformatted;
+			h_A = a_reformatted;		
+		}
     }
 
 	enum {
@@ -503,32 +431,65 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     int m_global = M * m_tiles,
         k_global = K * k_tiles,
         n_global = N * n_tiles;
-
+		
+	printf("Dimensions: (%d, %d) ; (%d, %d) ; (%d, %d)\n", h_A->shape[0], h_A->shape[1], h_B->shape[0], h_B->shape[1], h_C->shape[0], h_C->shape[1]);
+	printf("%d, %d, %d\n", m_global, k_global, n_global); 
+		
     // Convert into equivalent arrays. 
     half* A = (half*)malloc(sizeof(half) * m_global * k_global);
     half* B = (half*)malloc(sizeof(half) * k_global * n_global);
-    int size = k_global * n_global; 
-    float* C = (float*)malloc(sizeof(float) * m_global * n_global);
-    float* D = (float*)malloc(sizeof(float) * m_global * n_global);
-
-    for (int i = 0; i < h_A->shape[1]; i++)
-        A[i] = (half)h_A->arr[i];
-    for (int i = h_A->shape[1]; i < m_global * k_global; i++)
-        A[i] = (half)0.0;
+	float* C = (float*)malloc(sizeof(float) * m_global * n_global);
+	float* D = (float*)malloc(sizeof(float) * m_global * n_global);
 	
+	// Copy h_A to A (assuming that it's a multiple of 8)
+	for (int i = 0; i < h_A->shape[0]; i++) {
+		for (int j = 0; j < h_A->shape[1]; j++)
+			A[i * k_global + j] = (half)h_A->arr[i * h_A->shape[1] + j];
+		for (int j = h_A->shape[1]; j < k_global; j++) 
+			A[i * k_global + j] = (half)0.0f; 
+	}
+	for (int i = h_A->shape[0]; i < m_global; i++) 
+		for (int j = 0; j < k_global; j++) 
+			A[i * k_global + j] = (half)0.0f;
+    
     // TODO: Since the compute_gemm kernel considers B to be in col-major order, 
     // we have to transpose the matrix when loading it in. This means we have to
     // assume B is square, so enough space is allowed for a transpose. This 
     // should be fixed in the future to conserve space! 
-    for (int j = 0; j < h_B->shape[1]; j++) {
-        for (int i = 0; i < h_B->shape[0]; i++)
-            B[i + j * n_global] = (half)h_B->arr[j + i * h_B->shape[1]];
-        for (int i = h_B->shape[0]; i < n_global; i++)
-            B[i + j * n_global] = (half)0.0; 
-    }
-
-    for (int i = 0; i < h_C->count; i++)
-        C[i] = (float)h_C->arr[i];
+	for (int i = 0; i < h_B->shape[0]; i++) {
+		for (int j = 0; j < h_B->shape[1]; j++)
+			B[i * k_global + j] = (half)h_B->arr[j * h_B->shape[1] + i];
+		for (int j = h_B->shape[1]; j < k_global; j++) 
+			B[i * k_global + j] = (half)0.0f; 
+	}
+	for (int i = h_B->shape[0]; i < n_global; i++) 
+		for (int j = 0; j < k_global; j++) 
+			B[i * k_global + j] = (half)0.0f;
+	
+    // Copy h_C to C (assuming that it's a multiple of 8)
+	for (int i = 0; i < h_C->shape[0]; i++) {
+		for (int j = 0; j < h_C->shape[1]; j++)
+			C[i * n_global + j] = h_C->arr[i * h_C->shape[1] + j];
+		for (int j = h_C->shape[1]; j < n_global; j++) 
+			C[i * n_global + j] = 0.0f; 
+	}
+	for (int i = h_C->shape[0]; i < m_global; i++) 
+		for (int j = 0; j < n_global; j++) 
+			C[i * n_global + j] = 0.0f;
+			
+	// Save intermediate inputs to a file. 
+#if defined(SAVE_INTERMEDIATE)
+	std::string file_name = "conv_data/conv" + std::to_string(conv_layer_counter++);
+	
+	RawDataset<half> input(A, m_global, k_global);
+	input.save(file_name + "_x.bin"); 
+	
+	RawDataset<half> weights(B, k_global, n_global); 
+	weights.save(file_name + "_w.bin");
+	
+	RawDataset<float> bias(C, m_global, n_global); 
+	bias.save(file_name + "_b.bin");
+#endif 
 	
     half* d_A; checkCudaErrors(cudaMalloc(&d_A, sizeof(half) * m_global * k_global));
     half* d_B; checkCudaErrors(cudaMalloc(&d_B, sizeof(half) * k_global * n_global));
@@ -541,13 +502,15 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     checkCudaErrors(cudaMemcpy(d_D, D, sizeof(float) * m_global * n_global, cudaMemcpyHostToDevice));
 
     checkCudaErrors(cudaFuncSetAttribute(compute_gemm, cudaFuncAttributeMaxDynamicSharedMemorySize, SHMEM_SZ));
-    checkKernelErrors((compute_gemm<<<deviceProp.multiProcessorCount, THREADS_PER_BLOCK, SHMEM_SZ>>>(d_A, d_B, d_C, d_D, m_tiles, n_tiles, k_tiles)));
+    
+	checkKernelErrors((compute_gemm<<<deviceProp.multiProcessorCount, THREADS_PER_BLOCK, SHMEM_SZ>>>(d_A, d_B, d_C, d_D, m_tiles, n_tiles, k_tiles)));
     checkCudaErrors(cudaDeviceSynchronize());
 
-    checkCudaErrors(cudaMemcpy(D, d_D, sizeof(float)* m_global* n_global, cudaMemcpyDeviceToHost)); 
-    for (int i = 0; i < h_D->shape[1]; i++)
-        h_D->arr[i] = (ND_TYPE)D[i]; 
-
+    checkCudaErrors(cudaMemcpy(D, d_D, sizeof(float) * m_global* n_global, cudaMemcpyDeviceToHost)); 
+	for (int i = 0; i < h_D->shape[0]; i++)
+		for (int j = 0; j < h_D->shape[1]; j++)
+			h_D->arr[i * h_D->shape[1] + j] = D[i * n_global + j]; 
+	
     free(A);
     free(B);
     free(C);
@@ -557,7 +520,8 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     checkCudaErrors(cudaFree(d_C));
     checkCudaErrors(cudaFree(d_D));
 
-    if (reformatted_b_matrix) ndarray_free(h_B); 
+    if (b_reformatted != nullptr) ndarray_free(b_reformatted);
+	if (a_reformatted != nullptr) ndarray_free(a_reformatted); 
 }
 
 int invoke_beginning(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
@@ -713,7 +677,7 @@ int invoke_beginning(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
 
     float temp = 0;
     for (int k = 0; k < N_GLOBAL; k++) {
-        temp += (float)A_h[k] * (float)B_h[k];
+        // temp += (float)A_h[k] * (float)B_h[k]; // This causes an error on Cuda 9.2 
     }
     float result = temp * C_h[0];
     printf("Actual: %f, ours: %f\n", result_hD[0], result);

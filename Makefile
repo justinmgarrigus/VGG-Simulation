@@ -1,5 +1,6 @@
-FLAGS = -lcudart
-INCLUDES = -I/usr/local/cuda/include -Isrc/c -Isrc/gpu
+FLAGS = -DTENSORCORE -DSAVE_INTERMEDIATE
+#FLAGS = -DTENSORCORE
+INCLUDES = -Ilib/Common -I/usr/local/cuda/include -Isrc/c -Isrc/gpu -I/mnt/c/users/justi/desktop/Programming/Cuda/cutlass -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda-9.1/lib64/stubs" -L"/usr/local/cuda-9.1/lib64" 
 MODEL = -vgg16 
 
 .PHONY: internal-target external-target
@@ -14,13 +15,12 @@ ifeq ("$(wildcard lib/libjpeg/djpeg)", "")
 	$(MAKE) libjpeg
 endif
 
-ifeq ("$(wildcard obj/*)", "") 
 	mkdir -p obj 
 	mkdir -p obj/c 
 	mkdir -p obj/gpu
 	mkdir -p obj/python 
 	mkdir -p bin 
-endif
+	mkdir -p conv_data
 
 libjpeg: 
 	cd lib/libjpeg ; \
@@ -37,8 +37,14 @@ c-compile: pre-build
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS) $(INCLUDES)
-	nvcc -o obj/gpu/cudaTensorCoreGemm.o -c src/gpu/cudaTensorCoreGemm.cu $(FLAGS) $(INCLUDES) -Ilib/Common -arch=sm_70
+	nvcc -o obj/gpu/cudaTensorCoreGemm.o -c src/gpu/cudaTensorCoreGemm.cu $(FLAGS) $(INCLUDES) -arch=sm_70
 	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/gpu/layer_gpu.o obj/c/ndarray.o obj/c/image.o obj/c/json.o obj/gpu/cudaTensorCoreGemm.o -lm $(FLAGS)
+
+gemm-compile: pre-build 
+	nvcc -o obj/gpu/cudaTensorCoreGemm.o -c src/gpu/cudaTensorCoreGemm.cu $(FLAGS) $(INCLUDES) -arch=sm_70
+	nvcc -o obj/gpu/gemm.o -c src/gpu/gemm.cu $(FLAGS) $(INCLUDES) -arch=sm_70
+	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS) $(INCLUDES)
+	nvcc -o bin/gemm obj/gpu/gemm.o obj/gpu/cudaTensorCoreGemm.o obj/c/ndarray.o
 
 alexnet: c-compile
 	bash -c "trap 'trap - SIGINT SIGTERM ERR; $(MAKE) c-clean; exit 1' SIGINT SIGTERM ERR; $(MAKE) c-run MODEL=alexnet"
@@ -62,7 +68,7 @@ c-clean:
 	rm -f gpgpu_inst_stats.txt
 
 python: 
-	python3 src/python/vgg.py
+	python3 src/python/network.py
 
 json: pre-build
 	gcc -o obj/c/json.o -c lib/json-parser/json.c

@@ -93,7 +93,9 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
 	printf("--MaxPooling\n");
+	printf("input\n"); 
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
+	printf("output\n"); 
 	ndarray *output = ndarray_copy(pool_layer->outputs, cudaMemcpyDeviceToHost);
 	
 	for (int offset_x = 0; offset_x < input->shape[1]; offset_x += 2) {

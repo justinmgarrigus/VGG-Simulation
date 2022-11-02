@@ -15,8 +15,8 @@ import timer
 
 np.random.seed(1000)
 
-use_tensorcore = False # Note: doesn't actually use tensorcores, just does matrix multiplication instead 
-override_probability = True # If true, the entire calculation is performed for each layer; if false, a fraction of the calculation is performed.
+use_tensorcore = True # Note: doesn't actually use tensorcores, just does matrix multiplication instead 
+override_probability = False # If true, the entire calculation is performed for each layer; if false, a fraction of the calculation is performed.
 check_accuracy = False # If true, calculated values are compared with the values we should have calculated. 
 
 magic_number = 1234 
@@ -24,6 +24,14 @@ layer_types = {'InputLayer': 0, 'Conv2D': 1, 'MaxPooling2D': 2, 'Flatten': 3, 'D
 activation_types = {'relu': 1, 'softmax': 2}
 filtered_layers = {'Dropout'} 
 network_types = ['vgg16', 'alexnet', 'lenet'] 
+
+
+# Returns the sum of every element in an ndarray 
+def entropy(arr): 
+	total = 0 
+	for x in np.nditer(arr): 
+		total += x 
+	return total 
 
 
 # Replaces None elements in the input tuple with 1s. 
@@ -63,6 +71,11 @@ def save_network(model, file_name):
 	layer_count = len(model.layers) - len([x for x in model.layers if x.__class__.__name__ in filtered_layers]) 
 	write_int(layer_count) 
 	
+	if model.layers[0].__class__.__name__ != 'InputLayer': 
+		write_int(0) # layer type  
+		write_int(0) # hi=ow many weights 
+		write_shape(model.layers[0].input_shape) 
+	
 	for layer in model.layers:
 		name = layer.__class__.__name__
 		if name in filtered_layers: continue 
@@ -101,10 +114,23 @@ def load_network(model, file_name):
 		print('Error: magic number in file', file_name, 'not 1234! Read:', magic_number) 
 		sys.exit(1) 
 	
+	if model.layers[0].__class__.__name__ == 'InputLayer': 
+		write_int(0) # layer type  
+		write_int(0) # how many weights 
+		write_shape(model.layers[0].input_shape) 
+	
 	for layer in range(read_int()): 
+		name = model.layers[layer].__class__.__name__
+		if name in filtered_layers: continue 
+		
 		layer_type = read_int() 
+		if layer_type == 0 and name != 'InputLayer': 
+			read_int() # how many weights
+			for i in range(read_int()): read_int() # shape 
+			layer_type = read_int() 
+			
 		if layer_type == layer_types['Conv2D'] or layer_type == layer_types['Dense']:
-			read_int() 
+			read_int()
 		
 		weight_set = [] 
 		for weights in range(read_int()): 
@@ -128,6 +154,7 @@ def load_network(model, file_name):
 
 def create_alexnet(train=False):
 	model = keras.models.Sequential([\
+	keras.layers.InputLayer(input_shape=(227,227,3), name='beginning'),\
 	keras.layers.Conv2D(filters=96, kernel_size=(11,11), strides=(4,4), activation='relu', input_shape=(227,227,3)),\
     keras.layers.BatchNormalization(),\
     keras.layers.MaxPool2D(pool_size=(3,3), strides=(2,2)),\
@@ -158,9 +185,15 @@ def create_alexnet(train=False):
 		image = tf.image.resize(image, (227,227))
 		return image, label
 	
+	dataset_percent = 0.1 
+	validation_percent = 0.1 
 	(train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.cifar10.load_data()
-	validation_images, validation_labels = train_images[:5000], train_labels[:5000]
-	train_images, train_labels = train_images[5000:], train_labels[5000:]
+	train_images = train_images[:int(len(train_images) * dataset_percent)]
+	train_labels = train_labels[:int(len(train_labels) * dataset_percent)]
+	test_images = test_images[:int(len(test_images) * dataset_percent)]
+	test_labels = test_labels[:int(len(test_labels) * dataset_percent)]
+	validation_images, validation_labels = train_images[:int(len(train_images) * validation_percent)], train_labels[:int(len(train_labels) * validation_percent)]
+	train_images, train_labels = train_images[int(len(train_images) * validation_percent):], train_labels[int(len(train_labels) * validation_percent):]
 	train_ds = tf.data.Dataset.from_tensor_slices((train_images, train_labels))
 	test_ds = tf.data.Dataset.from_tensor_slices((test_images, test_labels))
 	validation_ds = tf.data.Dataset.from_tensor_slices((validation_images, validation_labels))
@@ -182,7 +215,7 @@ def create_alexnet(train=False):
 
 def create_vgg16(train=False): 
 	model = VGG16(weights='imagenet')
-	if train or not os.path.exists('data/alexnet.nn'): 
+	if train or not os.path.exists('data/vgg16.nn'): 
 		save_network(model, 'data/vgg16.nn')
 	return model 
 
@@ -332,12 +365,21 @@ def softmax(X):
 
 def conv_2D(layer, inputs):
 	print('Conv 2D ', end='', flush=True) 
+	
+	outputnp = conv_2D_tensorcore(layer, inputs) if use_tensorcore else conv_2D_normal(layer, inputs)
+	
+	# Replace with required data type 
+	eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)
+	return eager_tensor
+
+
+def conv_2D_normal(layer, inputs): 
 	epsilon = 0.01 # Accepted error  
 	
 	# Actual output
 	outputs = layer(inputs) 
 	outputnp = outputs.numpy()
-	inputsnp = inputs.numpy() 
+	inputsnp = inputs if isinstance(inputs, np.ndarray) else inputs.numpy()
 	
 	# Probability of replacing an actual output
 	if not override_probability:
@@ -359,11 +401,13 @@ def conv_2D(layer, inputs):
 	
 	timer.start() 
 	
+	dot_counter = 0 
 	for x in range(outputnp.shape[1]):
 		for y in range(outputnp.shape[2]):
 			result = 0 
 			for filter_index in range(outputnp.shape[3]): 
 				# Chance of replacing expected value with custom calculated value
+				dot_counter += 1 
 				if override_probability or random.random() < probability: 
 					result = weights[filter_index]
 					for kernel_x in range(kernel_size[0]): 
@@ -385,16 +429,118 @@ def conv_2D(layer, inputs):
 	
 	timer.stop() 
 	print(timer.elapsed()) 
+	print('Dot products:', dot_counter) 
+	return outputnp
 	
-	# Replace with required data type 
-	eager_tensor = tf.convert_to_tensor(outputnp, dtype=np.float32)
-	return eager_tensor
+
+def conv_2D_tensorcore(layer, inputs): 
+	assert(layer.strides[0] == layer.strides[1]) 
+	outputs = layer(inputs) # actual output we should compare against 
+	outputnp = outputs.numpy()
+	
+	inputsnp = inputs if isinstance(inputs, np.ndarray) else inputs.numpy()
+	kernel = layer.kernel.numpy()
+	weights = layer.weights[1].numpy() 
+	
+	print() 
+	print('Info:') 
+	print('  stride:', layer.strides[0]) 
+	print('  input shape:', inputsnp.shape) 
+	print('  output shape:', outputnp.shape) 
+	print('  kernel shape:', kernel.shape) 
+	
+	if layer.padding == 'same': 
+		pad = (layer.kernel_size[0] - 1) // 2
+		inputsnp = np.pad(inputsnp, [(0, 0), (pad, pad), (pad, pad), (0, 0)], mode='constant') # count, x, y, channel
+	elif layer.padding == 'valid': 
+#		new_size = inputsnp.shape[1] - layer.strides[0] - 1 
+#		shrink_inputsnp = np.empty(shape=(1, new_size, new_size, inputsnp.shape[3])) 
+#		for i in range(new_size):
+#			for j in range(new_size): 
+#				for k in range(inputsnp.shape[3]): 
+#					shrink_inputsnp[0, i, j, k] = inputsnp[0, i, j, k]
+#		inputsnp = shrink_inputsnp 
+		pass 
+		
+	input_adjusted = img2col(inputsnp, kernel.shape, layer.strides[0]) 
+	kernel_adjusted = kernel2col(kernel) 
+	
+	result_col = np.matmul(input_adjusted, kernel_adjusted)
+	for filter_index in range(weights.shape[0]): 
+		for spot in range(result_col.shape[0]):
+			result_col[spot][filter_index] += weights[filter_index] 
+			if result_col[spot][filter_index] < 0:
+				result_col[spot][filter_index] = 0 
+	
+	resultnp = col2img(result_col) 
+	
+	np.testing.assert_array_almost_equal(outputnp, resultnp, decimal=1)
+	
+	print('Entropy:') 
+	print('  input_adjusted:', entropy(input_adjusted)) 
+	print('  result_col:', entropy(result_col)) 
+	print('  resultnp:', entropy(resultnp)) 
+	
+	return resultnp
+	
+
+# Converts a 4D array into a 2D matrix. 
+# arr: must be of size (1, X, X, X)
+# kernel_shape: (X, X, X, X)  
+# padding_amount: int 
+# stride_amount: int 
+def img2col(arr, kernel_shape, stride_amount): 
+	assert len(arr.shape) == 4 
+	assert arr.shape[0] == 1 
+	assert len(kernel_shape) == 4 
+	assert kernel_shape[0] == kernel_shape[1] # Assumes that kernels are square
+
+	# Warning: a potential source of error is the orientation of the image. This may reflect
+	# the image across the wrong access, so check this first. 
+	kernel_length = kernel_shape[0]
+	width = math.floor(((arr.shape[1] - kernel_length) / stride_amount) + 1)
+	height = math.floor(((arr.shape[2] - kernel_length) / stride_amount) + 1) 
+	cols = np.zeros(shape=(width * height, arr.shape[3] * kernel_length * kernel_length)) # Note: I reversed the row and col sizes
+	
+	print('  cols shape:', cols.shape) 
+	
+	for dot in range(cols.shape[0]): # How many dot products we are calculating 
+		col = np.zeros(cols.shape[1])  # The number of multiplications in one dot product
+		col_index = 0 
+		x = dot // height * stride_amount 
+		y = dot % width * stride_amount
+		for i in np.ndindex((kernel_shape[2], kernel_shape[0], kernel_shape[1])):
+			col[col_index] = arr[0, x + i[1], y + i[2], i[0]] 
+			col_index += 1 
+		cols[dot] = col 
+	return cols 
 
 
+def kernel2col(kernel): 
+  col = np.zeros(shape=(kernel.shape[0] * kernel.shape[1] * kernel.shape[2], kernel.shape[3]))
+  for c in range(col.shape[1]):
+    counter = 0 
+    for i in np.ndindex((kernel.shape[2], kernel.shape[0], kernel.shape[1])):
+      col[counter, c] = kernel[i[1], i[2], i[0], c] 
+      counter += 1 
+  return col 
+  
+  
+def col2img(arr): 
+  length = int(math.sqrt(arr.shape[0])) # Assuming shape is a square 
+  resultnp = np.zeros(shape=(1, length, length, arr.shape[1]))
+  for filter_index in range(arr.shape[1]): 
+    for i in range(arr.shape[0]): 
+      resultnp[0, i // length, i % length, filter_index] = arr[i, filter_index] 
+  return resultnp 
+
+	
 def batch_normalization(layer, inputs):
 	print('Batch normalization ', end='', flush=True)
 	outputs = layer(inputs)
 	outputsnp = outputs.numpy()
+	
+	return outputs # TODO: remove 
 	
 	gamma = layer.weights[0].numpy() 
 	beta = layer.weights[1].numpy() 
@@ -441,21 +587,23 @@ def max_pooling(layer, inputs):
 	inputsnp = inputs.numpy()
 	outputsnp = outputs.numpy()
 	
+	print(layer.pool_size, layer.strides) 
+	
 	timer.start() 
 	
-	for offset_x in range (0, inputsnp.shape[1], 2):
-		for offset_y in range (0, inputsnp.shape[2], 2):
+	for offset_x in range (0, inputsnp.shape[1], layer.strides[0]):
+		for offset_y in range (0, inputsnp.shape[2], layer.strides[1]):
 			for z in range (0, inputsnp.shape[3]):
 				max_value = float('-inf')
-				for kernel_x in range (2):
-					for kernel_y in range (2):
+				for kernel_x in range (layer.pool_size[0]):
+					for kernel_y in range (layer.pool_size[1]):
 						x = offset_x + kernel_x 
 						y = offset_y + kernel_y 
 						if inputsnp.shape[1] > x and inputsnp.shape[2] > y: 							
 							if inputsnp[0][x][y][z] > max_value:
 								max_value = inputsnp[0][x][y][z]
-				x = offset_x // 2 
-				y = offset_y // 2 
+				x = offset_x // layer.pool_size[0]
+				y = offset_y // layer.pool_size[1]
 				if outputsnp.shape[1] > x and outputsnp.shape[2] > y: 
 					outputsnp[0][x][y][z] = max_value
 
