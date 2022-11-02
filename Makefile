@@ -1,6 +1,6 @@
 FLAGS = -DTENSORCORE -DSAVE_INTERMEDIATE
 #FLAGS = -DTENSORCORE
-INCLUDES = -Ilib/Common -I/usr/local/cuda/include -Isrc/c -Isrc/gpu -I/mnt/c/users/justi/desktop/Programming/Cuda/cutlass -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda-9.1/lib64/stubs" -L"/usr/local/cuda-9.1/lib64" 
+INCLUDES = -Ilib/Common -I/usr/local/cuda/include -Isrc/c -Isrc/gpu -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda-9.1/lib64/stubs" -L"/usr/local/cuda-9.1/lib64" 
 MODEL = -vgg16 
 
 .PHONY: internal-target external-target
