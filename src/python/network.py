@@ -215,8 +215,8 @@ def create_alexnet(train=False):
 
 def create_vgg16(train=False): 
 	model = VGG16(weights='imagenet')
-	if train or not os.path.exists('data/vgg16.nn'): 
-		save_network(model, 'data/vgg16.nn')
+	if train or not os.path.exists('data/vgg.nn'): 
+		save_network(model, 'data/vgg.nn')
 	return model 
 
 
