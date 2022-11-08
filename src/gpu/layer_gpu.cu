@@ -63,24 +63,32 @@ __host__ void layer_convolutional_feedforward_gpu_setup_tensorcore(layer* input_
 	ndarray** h_weight_set = layer_copy_weights(conv_layer, cudaMemcpyDeviceToHost);
 	ndarray* h_kernel = h_weight_set[0]; 
 	ndarray* h_bias = h_weight_set[1]; 
+	ndarray* h_padding = h_weight_set[2];
+	
+	printf("Input entropy: %f\n", ndarray_entropy(h_input));
 	
 	// Pad input array
- 	int padding[4] = {0, 1, 1, 0};
-	ndarray *h_inputs_padded = ndarray_pad(h_input, padding, 1);
-//	ndarray *h_inputs_padded = ndarray_copy(h_input, cudaMemcpyHostToHost); 
+	ndarray_deep_display(h_padding); 
+ 	if (h_padding->arr[1] != 0) {
+		int padding[4] = {0, 1, 1, 0};
+		ndarray *h_inputs_padded = ndarray_pad(h_input, padding, 1); 
+		free(h_input); 
+		h_input = h_inputs_padded; 
+	}
 	
 	// Convert h_input to an image2col representation
 	int kernel_length = h_kernel->shape[0]; 
-	int padding_amount = 0; // TODO: should be variable. 
-	int stride_amount = 1; // stride_flag == 1 ? 4 : 1;  // TODO: should be variable. 
-//	stride_flag = 0; 
+	int stride_amount = h_weight_set[3]->arr[0];
 	
-	int width = floor(((h_inputs_padded->shape[1] + 2*padding_amount - kernel_length) / stride_amount) + 1); 
-	int height = floor(((h_inputs_padded->shape[2] + 2*padding_amount - kernel_length) / stride_amount) + 1); 
-	int cols_shape[2] = { width * height, h_inputs_padded->shape[3] * kernel_length * kernel_length }; 
+	printf("Stride = %d\n", stride_amount);
+	
+	int width = floor(((h_input->shape[1] - kernel_length) / stride_amount) + 1); 
+	int height = floor(((h_input->shape[2] - kernel_length) / stride_amount) + 1); 
+	int cols_shape[2] = { width * height, h_input->shape[3] * kernel_length * kernel_length }; 
 	ndarray *cols = ndarray_create(2, cols_shape);
 
 	printf("Cols dimension: %d, %d\n", cols_shape[0], cols_shape[1]); 
+	printf("h_kernel shape: [%d, %d, %d]\n", h_kernel->shape[2], h_kernel->shape[0], h_kernel->shape[1]); 
 	
 	int iter_shape[3] = { h_kernel->shape[2], h_kernel->shape[0], h_kernel->shape[1] }; 
 	int pos[3]; 
@@ -90,7 +98,7 @@ __host__ void layer_convolutional_feedforward_gpu_setup_tensorcore(layer* input_
 		int kernel_x = vec_index / height * stride_amount; 
 		int kernel_y = vec_index % width  * stride_amount; 
 		do { 
-			float value = ndarray_get_val_param(h_inputs_padded, 0, kernel_x + pos[1], kernel_y + pos[2], pos[0]); 
+			float value = ndarray_get_val_param(h_input, 0, kernel_x + pos[1], kernel_y + pos[2], pos[0]); 
 			ndarray_set_val_param(cols, value, vec_index, col_index++);  
 		}
 		while (ndarray_decimal_count(3, pos, iter_shape));
@@ -151,8 +159,7 @@ __host__ void layer_convolutional_feedforward_gpu_setup_tensorcore(layer* input_
 	ndarray_free(h_input); 
 	free(h_weight_set); 
 	ndarray_free(h_kernel); 
-	ndarray_free(h_bias); 
-	ndarray_free(h_inputs_padded); 
+	ndarray_free(h_bias);
 	ndarray_free(cols); 
 	ndarray_free(kernel_col); 
 	ndarray_free(bias_col); 
@@ -294,6 +301,10 @@ __host__ void layer_dense_feedforward_gpu_setup(layer* input_layer, layer* dense
 //#else 
 //	layer_dense_feedforward_gpu_setup_normal(input_layer, dense_layer); 
 //#endif 
+
+	ndarray *outputs = ndarray_copy(dense_layer->outputs, cudaMemcpyDeviceToHost); 
+	printf("  Entropy: %f\n", ndarray_entropy(outputs)); 
+	free(outputs); 
 }
 
 __global__ void layer_dense_feedforward_gpu(ndarray* inputs, ndarray* outputs, ndarray** weight_set, int blocks, int threads) {

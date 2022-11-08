@@ -247,7 +247,7 @@ __global__ void compute_gemm(const half* A, const half* B, const float* C, float
     }
 }
 
-#if (CUDART_VERSION > 9010) 
+#if (0 > 1) // (CUDART_VERSION > 9010) TODO: make this more efficient on newer architectures. 
 
 __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B, 
                                   int m_global, int k_global, int n_global) 
@@ -286,34 +286,19 @@ __global__ void arr_float2half(half* dest, float* src, int count) {
 	dest[index] = __float2half(src[index]); 
 }
 
-__global__ void transfer_arr(half* A_re, half* B_re, float* A_arr, float* B_arr,
-                             int m_global, int k_global, int n_global, 
-							 int a_shape0, int a_shape1, int b_shape0, int b_shape1)
+__global__ void transfer_arr(half* dest, float* src, 
+							 int dest_rows, int dest_cols, 
+							 int src_rows, int src_cols) 
 {
-	// Copy A_arr to A_re (assuming that it's a multiple of 8)
-	for (int i = 0; i < a_shape0; i++) {
-		for (int j = 0; j < a_shape1; j++)
-			A_re[i * k_global + j] = (half)A_arr[i * a_shape1 + j];
-		for (int j = a_shape1; j < k_global; j++) 
-			A_re[i * k_global + j] = (half)0.0f; 
+	for (int i = 0; i < src_rows; i++) {
+		for (int j = 0; j < src_cols; j++)
+			dest[i * dest_cols + j] = __float2half(src[i * src_cols + j]); 
+		for (int j = src_cols; j < dest_cols; j++) 
+			dest[i * dest_cols + j] = 0; 
 	}
-	for (int i = a_shape0; i < m_global; i++) 
-		for (int j = 0; j < k_global; j++) 
-			A_re[i * k_global + j] = (half)0.0f;
-    
-    // TODO: Since the compute_gemm kernel considers B to be in col-major order, 
-    // we have to transpose the matrix when loading it in. This means we have to
-    // assume B is square, so enough space is allowed for a transpose. This 
-    // should be fixed in the future to conserve space! 
-	for (int i = 0; i < b_shape0; i++) {
-		for (int j = 0; j < b_shape1; j++)
-			B_re[i * k_global + j] = (half)B_arr[j * b_shape1 + i];
-		for (int j = b_shape1; j < k_global; j++) 
-			B_re[i * k_global + j] = (half)0.0f; 
-	}
-	for (int i = b_shape0; i < n_global; i++) 
-		for (int j = 0; j < k_global; j++) 
-			B_re[i * k_global + j] = (half)0.0f;
+	for (int i = src_rows; i < dest_rows; i++) 
+		for (int j = 0; j < dest_cols; j++) 
+			dest[i * dest_cols + j] = 0;
 }
 
 // Cuda 9.1 does not support half values at all on the host, so we need to do 
@@ -327,20 +312,13 @@ __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B,
 	float *A_arr = nullptr; cudaMalloc(&A_arr, sizeof(float) * h_A->count); 
 	float *B_arr = nullptr; cudaMalloc(&B_arr, sizeof(float) * h_B->count); 
 	cudaMemcpy(A_arr, h_A->arr, sizeof(float) * h_A->count, cudaMemcpyHostToDevice); 
-	cudaMemcpy(B_arr, h_B->arr, sizeof(float) * h_B->count, cudaMemcpyHostToDevice); 
-	
-	// Cast device h_A and device h_B data to half representations device-side 
-	half *A_half = nullptr; cudaMalloc(&A_half, sizeof(half) * h_A->count); 
-	half *B_half = nullptr; cudaMalloc(&B_half, sizeof(half) * h_B->count); 
-	arr_float2half<<<h_A->count / thread_count, thread_count>>>(A_half, A_arr, h_A->count); 
-	arr_float2half<<<h_B->count / thread_count, thread_count>>>(B_half, B_arr, h_A->count);
+	cudaMemcpy(B_arr, h_B->arr, sizeof(float) * h_B->count, cudaMemcpyHostToDevice);
 	
 	// Reformat data to properly align with the gemm function 
 	half *A_re = nullptr; cudaMalloc(&A_re, sizeof(half) * m_global * k_global); 
 	half *B_re = nullptr; cudaMalloc(&B_re, sizeof(half) * k_global * n_global); 
-	transfer_arr<<<1,1>>>(A_re, B_re, A_arr, B_arr, 
-	                      m_global, k_global, n_global,
-						  h_A->shape[0], h_A->shape[1], h_B->shape[0], h_B->shape[1]); 
+	transfer_arr<<<1,1>>>(A_re, A_arr, m_global, k_global, h_A->shape[0], h_A->shape[1]);
+	transfer_arr<<<1,1>>>(B_re, B_arr, k_global, n_global, h_B->shape[0], h_B->shape[1]);	
 						  
 	// Copy reformatted data back to goal output 
     cudaMemcpy(A, A_re, sizeof(half) * m_global * k_global, cudaMemcpyDeviceToHost); 
@@ -348,9 +326,7 @@ __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B,
     
     // Free all allocated data 
     cudaFree(A_arr); 
-    cudaFree(B_arr); 
-    cudaFree(A_half); 
-    cudaFree(B_half); 
+    cudaFree(B_arr);
     cudaFree(A_re); 
     cudaFree(B_re); 
 }
@@ -365,54 +341,15 @@ int pad_multiple(int value, int multiple) {
 __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
 	printf("Matrix multiply\n"); 
 	
-    // Assumption: since compute_gemm considers B to be col-wise (which doesn't work 
-    // for our purposes), we need to transpose it. Thus, B must be square!
-	// If these are reshaped, then a_reformatted and b_reformatted will not be null.  
-	ndarray *b_reformatted = nullptr;
-	ndarray *a_reformatted = nullptr; 
-    if (h_B->shape[0] != h_B->shape[1]) {
-		if (h_B->shape[0] > h_B->shape[1]) {
-			// Resize B to be square based on the size of h_B->shape[0]
-			const int input_size = h_A->shape[1];
-			const int output_size = h_B->shape[1];
+	// Convert h_B from row-wise to col-wise
+	int col_wise_shape[2] = { h_B->shape[1], h_B->shape[0] }; 
+	ndarray *h_B_col = ndarray_create(2, col_wise_shape); 
 	
-			int reformat_shape[2] = { input_size, input_size };
-			b_reformatted = ndarray_create(2, reformat_shape);
-	
-			for (int r = 0; r < input_size; r++) {
-				for (int c = 0; c < output_size; c++)
-					b_reformatted->arr[r * input_size + c] = h_B->arr[r * output_size + c];
-				for (int c = output_size; c < input_size; c++)
-					b_reformatted->arr[r * input_size + c] = 0;
-			}
+	for (int i = 0; i < h_B->shape[0]; i++)
+		for (int j = 0; j < h_B->shape[1]; j++)
+			h_B_col->arr[j * h_B->shape[0] + i] = h_B->arr[i * h_B->shape[1] + j];
 			
-			h_B = b_reformatted;
-		}
-		else {
-			// Resize B to be square based on the size of h_B->shape[1]
-			int b_reformat_shape[2] = { h_B->shape[1], h_B->shape[1] }; 
-			b_reformatted = ndarray_create(2, b_reformat_shape);
-			
-			for (int i = 0; i < h_B->count; i++) 
-				b_reformatted->arr[i] = h_B->arr[i]; 
-			for (int i = h_B->count; i < b_reformatted->count; i++) 
-				b_reformatted->arr[i] = 0;
-			
-			// Resize A to align with B's new size
-			int a_reformat_shape[2] = { h_A->shape[0], h_B->shape[1] };
-			a_reformatted = ndarray_create(2, a_reformat_shape);
-	
-			for (int r = 0; r < h_A->shape[0]; r++) {
-				for (int c = 0; c < h_A->shape[1]; c++)
-					a_reformatted->arr[r * a_reformatted->shape[1] + c] = h_A->arr[r * h_A->shape[1] + c];
-				for (int c = h_A->shape[1]; c < a_reformatted->shape[1]; c++)
-					a_reformatted->arr[r * a_reformatted->shape[1] + c] = 0;
-			}
-			
-			h_B = b_reformatted;
-			h_A = a_reformatted;		
-		}
-    }
+	h_B = h_B_col;
 
 	enum {
         SHMEM_SZ = MAX(
@@ -447,6 +384,10 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
 
 	// Dependent on Cuda version, populate A and B
 	ndarray_to_half_arr(A, B, h_A, h_B, m_global, k_global, n_global); 
+	if (cudaGetLastError() != cudaSuccess) {
+		printf("Error: ndarray_to_half_arr (%s)\n", cudaGetErrorName(cudaGetLastError())); 
+		exit(1); 
+	}
 
 	// Copy h_C to C (assuming that it's a multiple of 8)
 	for (int i = 0; i < h_C->shape[0]; i++) {
@@ -501,7 +442,5 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
     checkCudaErrors(cudaFree(d_B));
     checkCudaErrors(cudaFree(d_C));
     checkCudaErrors(cudaFree(d_D));
-
-    if (b_reformatted != nullptr) ndarray_free(b_reformatted);
-	if (a_reformatted != nullptr) ndarray_free(a_reformatted); 
+	free(h_B_col); 
 }

@@ -38,13 +38,13 @@ c-compile: pre-build
 	gcc -o obj/c/image.o -c src/c/image.c $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/json.o -c lib/json-parser/json.c $(FLAGS) $(INCLUDES)
 	nvcc -o obj/gpu/cudaTensorCoreGemm.o -c src/gpu/cudaTensorCoreGemm.cu $(FLAGS) $(INCLUDES) -arch=sm_70
-	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/gpu/layer_gpu.o obj/c/ndarray.o obj/c/image.o obj/c/json.o obj/gpu/cudaTensorCoreGemm.o -lm $(FLAGS)
+	nvcc -o bin/vgg obj/c/vgg.o obj/c/network.o obj/c/layer.o obj/gpu/layer_gpu.o obj/c/ndarray.o obj/c/image.o obj/c/json.o obj/gpu/cudaTensorCoreGemm.o -lm --cudart shared $(FLAGS)
 
 gemm-compile: pre-build 
 	nvcc -o obj/gpu/cudaTensorCoreGemm.o -c src/gpu/cudaTensorCoreGemm.cu $(FLAGS) $(INCLUDES) -arch=sm_70
 	nvcc -o obj/gpu/gemm.o -c src/gpu/gemm.cu $(FLAGS) $(INCLUDES) -arch=sm_70
 	gcc -o obj/c/ndarray.o -c src/c/ndarray.c $(FLAGS) $(INCLUDES)
-	nvcc -o bin/gemm obj/gpu/gemm.o obj/gpu/cudaTensorCoreGemm.o obj/c/ndarray.o
+	nvcc -o bin/gemm obj/gpu/gemm.o obj/gpu/cudaTensorCoreGemm.o obj/c/ndarray.o --cudart shared
 
 alexnet: c-compile
 	bash -c "trap 'trap - SIGINT SIGTERM ERR; $(MAKE) c-clean; exit 1' SIGINT SIGTERM ERR; $(MAKE) c-run MODEL=alexnet"

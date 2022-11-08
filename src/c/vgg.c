@@ -1,6 +1,7 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h> 
 #include "network.h"
 #include "image.h" 
 
@@ -42,7 +43,54 @@ void vgg_image(char* file_name, ndarray* input) {
 }
 
 void alexnet_image(char* file_name, ndarray* input) {
-	printf("Preprocessing...\n");
+	printf("Loading image: %s\n", file_name); 
+	image *img = image_load(file_name); 
+	int size = img->width * img->height * 3; 
+	
+	// Average of all colors in image 
+	int elem_sum = 0;
+	for (int i = 0; i < img->width * img->height; i++) {
+		int color = img->colors[i]; 
+		int red   = color >> 16 & 0xFF, 
+			green = color >> 8  & 0xFF, 
+			blue  = color       & 0xFF;
+		elem_sum += red + green + blue;
+	}
+	float mean = (float)elem_sum / size; 
+	
+	// Standard deviation 
+	float deviation_sum = 0; 
+	for (int i = 0; i < img->width * img->height; i++) {
+		int color = img->colors[i]; 
+		int red   = color >> 16 & 0xFF, 
+			green = color >> 8  & 0xFF, 
+			blue  = color       & 0xFF;
+		deviation_sum += powf(red   - mean, 2); 
+		deviation_sum += powf(green - mean, 2); 
+		deviation_sum += powf(blue  - mean, 2);
+	}
+	float dev = sqrtf(deviation_sum / size); 
+	float sqrt_size = 1.0f / sqrtf(size); 
+	float adjusted_dev = (dev > sqrt_size) ? dev : sqrt_size; 
+	
+	for (int x = 0; x < input->shape[1]; x++) {
+		for (int y = 0; y < input->shape[2]; y++) {
+			int image_x = (float)x / input->shape[1] * img->width;
+			int image_y = (float)y / input->shape[2] * img->height;
+			
+			int color = image_pos_color(img, image_x, image_y);
+			float red =   ((color >> 16 & 0xFF) - mean) / adjusted_dev; 
+			float green = ((color >> 8  & 0xFF) - mean) / adjusted_dev; 
+			float blue =  ((color       & 0xFF) - mean) / adjusted_dev;
+			
+			ndarray_set_val_param(input, red,   0, y, x, 0);
+			ndarray_set_val_param(input, green, 0, y, x, 1);
+			ndarray_set_val_param(input, blue,  0, y, x, 2);
+		}
+	}
+	image_free(img); 
+	
+	printf("Mean: %f, dev: %f, entropy: %f\n", mean, dev, ndarray_entropy(input)); 
 }
 
 int main(int argc, char** argv) {

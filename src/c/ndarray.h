@@ -4,6 +4,7 @@
 #define ND_TYPE float
 #define ND_DISPLAY "%.1f"
 
+#include <stdio.h> 
 #include "cuda_runtime.h" 
 
 typedef struct ndarray {

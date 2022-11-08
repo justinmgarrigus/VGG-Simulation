@@ -96,23 +96,36 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
 	ndarray *output = ndarray_copy(pool_layer->outputs, cudaMemcpyDeviceToHost);
 	
-	for (int offset_x = 0; offset_x < input->shape[1]; offset_x += 2) {
-		for (int offset_y = 0; offset_y < input->shape[2]; offset_y += 2) {
+	ndarray **weights = layer_copy_weights(pool_layer, cudaMemcpyDeviceToHost); 
+	int stride = (int)weights[0]->arr[0]; 
+	int size = (int)weights[1]->arr[0]; 
+	
+	int limit_x = input->shape[1] - (input->shape[1] % stride), 
+		limit_y = input->shape[2] - (input->shape[2] % stride);
+	for (int offset_x = 0; offset_x < limit_x; offset_x += stride) {
+		for (int offset_y = 0; offset_y < limit_y; offset_y += stride) {
 			for (int z = 0; z < input->shape[3]; z++) {
-				ND_TYPE max_value = 0; 
-				for (int kernel_x = 0; kernel_x < 2; kernel_x++) {
-					for (int kernel_y = 0; kernel_y < 2; kernel_y++) {
+				ND_TYPE max_value = -INFINITY;
+				for (int kernel_x = 0; kernel_x < size; kernel_x++) {
+					for (int kernel_y = 0; kernel_y < size; kernel_y++) {
 						ND_TYPE val = ndarray_get_val_param(input, 0, offset_x + kernel_x, offset_y + kernel_y, z); 
 						if (val > max_value) 
 							max_value = val; 
 					}
 				}
-				ndarray_set_val_param(output, max_value, 0, offset_x / 2, offset_y / 2, z); 
+				ndarray_set_val_param(output, max_value, 0, offset_x / stride, offset_y / stride, z); 
 			}
 		}
 	}
 
-	pool_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
+	pool_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice);
+	
+	printf("  Entropy\n"); 
+	printf("    Input entropy: %f\n", ndarray_entropy(input)); 
+	printf("    Output entropy: %f\n", ndarray_entropy(output));
+	
+	free(input); 
+	free(output); 
 }
 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
@@ -139,5 +152,33 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 }
 
 void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_layer) {
-	// TODO 
+	printf("--BatchNormalization\n"); 
+	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
+	ndarray *output = ndarray_copy(batch_layer->outputs, cudaMemcpyDeviceToHost); 
+	
+	ndarray **weights = layer_copy_weights(batch_layer, cudaMemcpyDeviceToHost); 
+	float *gamma        = weights[0]->arr; 
+	float *beta         = weights[1]->arr; 
+	float *running_mean = weights[2]->arr; 
+	float *running_std  = weights[3]->arr; 
+	float epsilon       = weights[4]->arr[0]; 
+	
+	for (int i = 0; i < input->shape[1]; i++) {
+		for (int j = 0; j < input->shape[2]; j++) {
+			for (int k = 0; k < input->shape[3]; k++) {
+				float input_value = ndarray_get_val_param(input, 0, i, j, k); 
+				float result = gamma[k] * (input_value - running_mean[k]) / sqrtf(running_std[k] + epsilon) + beta[k]; 
+				ndarray_set_val_param(output, result, 0, i, j, k); 
+			}
+		}
+	}
+	
+	batch_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
+	
+	printf("  Entropy\n"); 
+	printf("    Input entropy: %f\n", ndarray_entropy(input)); 
+	printf("    Output entropy: %f\n", ndarray_entropy(output)); 
+	
+	free(input); 
+	free(output);
 }

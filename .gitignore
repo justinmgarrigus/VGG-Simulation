@@ -4,3 +4,6 @@ data/*.nn
 conv_data/
 *.out
 *__pycache__*
+gpgpusim.config
+*.icnt
+test.*  

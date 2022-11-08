@@ -68,7 +68,8 @@ network* network_create(enum model_type type) {
 	net->layers = malloc(sizeof(layer*) * net->layer_count);
 	
 	for (int i = 0; i < net->layer_count; i++) {
-		int layer_type = file_read_int(file, buffer); 
+		int layer_type = file_read_int(file, buffer);
+		
 		int activation_type; 
 		if (layer_type == layer_type_convolutional || layer_type == layer_type_dense)
 			activation_type = file_read_int(file, buffer);
@@ -76,16 +77,16 @@ network* network_create(enum model_type type) {
 			activation_type = 0; 
 		
 		int weight_set_count = file_read_int(file, buffer);  
-		ndarray **weight_set = malloc(sizeof(ndarray*) * weight_set_count); 
+		ndarray **weight_set = malloc(sizeof(ndarray*) * weight_set_count);
 		for (int set_index = 0; set_index < weight_set_count; set_index++) {
 			int dimensions = file_read_int(file, buffer); 
-			int *shape = malloc(sizeof(int) * dimensions); 
+			int *shape = malloc(sizeof(int) * dimensions);
 			for (int dimension = 0; dimension < dimensions; dimension++)
 				shape[dimension] = file_read_int(file, buffer); 
 			
 			ndarray *weights = ndarray_create(dimensions, shape);
 			for (int i = 0; i < weights->count; i++)
-				weights->arr[i] = file_read_float(file, buffer); 
+				weights->arr[i] = file_read_float(file, buffer);
 			
 			weight_set[set_index] = weights; 
 		}

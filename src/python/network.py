@@ -54,7 +54,7 @@ def save_network(model, file_name):
 		file.write(value.to_bytes(4, byteorder='big', signed=True)) 
 	
 	def write_float(value): 
-		byte_arr = bytearray(struct.pack("f", value)) 
+		byte_arr = bytearray(struct.pack("f", float(value))) 
 		file.write(byte_arr)
 		
 	def write_shape(shape): 
@@ -68,29 +68,48 @@ def save_network(model, file_name):
 	
 	write_int(1234)
 	
-	layer_count = len(model.layers) - len([x for x in model.layers if x.__class__.__name__ in filtered_layers]) 
+	layer_count = len(model.layers) - len([x for x in model.layers if x.__class__.__name__ in filtered_layers]) + (1 if model.layers[0].__class__.__name__ != 'InputLayer' else 0)
 	write_int(layer_count) 
+
+	print('Layers:', layer_count) 
 	
 	if model.layers[0].__class__.__name__ != 'InputLayer': 
 		write_int(0) # layer type  
-		write_int(0) # hi=ow many weights 
+		write_int(0) # how many weights 
 		write_shape(model.layers[0].input_shape) 
 	
 	for layer in model.layers:
 		name = layer.__class__.__name__
 		if name in filtered_layers: continue 
 		layer_type = layer_types.get(name)
-		write_int(layer_type) 
+		write_int(layer_type)
+		print('Layer type:', layer_type) 
 		
 		if layer_type == layer_types['Conv2D'] or layer_type == layer_types['Dense']: 
 			activation_type = activation_types.get(layer.activation.__name__)
 			write_int(activation_type) 
 		
-		write_int(len(layer.weights)) 
-		for weights in layer.weights: 
+		if layer_type == layer_types['MaxPooling2D']:
+			weights = [np.empty(shape=(1,)), np.empty(shape=(1,))]
+			weights[0][0] = layer.strides[0] 
+			weights[1][0] = layer.pool_size[0]
+		elif layer_type == layer_types['BatchNormalization']: 
+			weights = layer.weights
+			weights.append(np.array([layer.epsilon])) 
+		else: 
+			weights = layer.weights 
+			if layer_type == layer_types['Conv2D']:
+				pad = [0, 1, 1, 0] if layer.padding == 'same' else [0, 0, 0, 0] 
+				weights.append(np.array(pad)) 
+				weights.append(np.array([layer.strides[0]]))
+		
+		write_int(len(weights)) 
+		weight_counter = 0 
+		for weights in weights: 
 			write_shape(weights.shape) 
 			for weight in np.nditer(weights): 
-				write_float(weight) 
+				write_float(weight)
+			weight_counter += 1 
 		
 		write_shape(layer.output_shape) 
 		
@@ -144,7 +163,8 @@ def load_network(model, file_name):
 			for index in np.ndindex(arr.shape): 
 				arr[index] = read_float() 
 		
-		model.layers[layer].set_weights(weight_set) 
+		clipped_weights = weight_set[:len(model.layers[layer].get_weights())]
+		model.layers[layer].set_weights(clipped_weights) 
 		for out in range(read_int()):
 			read_int()
 	
@@ -309,6 +329,7 @@ def alexnet_preprocess(image, input_shape):
 			for p in range(3): 
 				image_input[0][y][x][p] = (pixel[p] - mean) / dev
 	
+	print(f'Mean: {mean}, dev: {dev}, entropy: {entropy(image_input)}') 
 	return image_input 
 
 
@@ -452,15 +473,6 @@ def conv_2D_tensorcore(layer, inputs):
 	if layer.padding == 'same': 
 		pad = (layer.kernel_size[0] - 1) // 2
 		inputsnp = np.pad(inputsnp, [(0, 0), (pad, pad), (pad, pad), (0, 0)], mode='constant') # count, x, y, channel
-	elif layer.padding == 'valid': 
-#		new_size = inputsnp.shape[1] - layer.strides[0] - 1 
-#		shrink_inputsnp = np.empty(shape=(1, new_size, new_size, inputsnp.shape[3])) 
-#		for i in range(new_size):
-#			for j in range(new_size): 
-#				for k in range(inputsnp.shape[3]): 
-#					shrink_inputsnp[0, i, j, k] = inputsnp[0, i, j, k]
-#		inputsnp = shrink_inputsnp 
-		pass 
 		
 	input_adjusted = img2col(inputsnp, kernel.shape, layer.strides[0]) 
 	kernel_adjusted = kernel2col(kernel) 
@@ -476,6 +488,7 @@ def conv_2D_tensorcore(layer, inputs):
 	
 	np.testing.assert_array_almost_equal(outputnp, resultnp, decimal=1)
 	
+	print('Dot products:', input_adjusted.shape[0] * kernel_adjusted.shape[1])
 	print('Entropy:') 
 	print('  input_adjusted:', entropy(input_adjusted)) 
 	print('  result_col:', entropy(result_col)) 
@@ -566,18 +579,11 @@ def batch_normalization(layer, inputs):
 				result[index] = outputsnp[index] 
 	
 	timer.stop() 
-	print(timer.elapsed()) 
+	print(timer.elapsed())
+			
+	np.testing.assert_array_almost_equal(outputsnp, result, decimal=1)
 	
-	if check_accuracy: 
-		# Verify average difference is less than 0.01 
-		diff = 0 
-		for x in np.ndindex(result.shape):
-			diff += abs(result[x] - outputsnp[x]) 
-		error = diff / outputsnp.size / probability
-		if error > 0.01: 
-			print('BatchNormalization error too high!', error)
-			sys.exit(0) 
-	
+	print('Input entropy:', entropy(inputs.numpy()), 'output entropy:', entropy(outputsnp)) 
 	return tf.convert_to_tensor(result, dtype=np.float32)
 
 
@@ -586,31 +592,36 @@ def max_pooling(layer, inputs):
 	outputs = layer(inputs)
 	inputsnp = inputs.numpy()
 	outputsnp = outputs.numpy()
-	
-	print(layer.pool_size, layer.strides) 
+	resultnp = np.empty(shape=outputsnp.shape) 
 	
 	timer.start() 
 	
-	for offset_x in range (0, inputsnp.shape[1], layer.strides[0]):
-		for offset_y in range (0, inputsnp.shape[2], layer.strides[1]):
+	limit_x = inputsnp.shape[1] - (inputsnp.shape[1] % layer.strides[0]) 
+	limit_y = inputsnp.shape[2] - (inputsnp.shape[2] % layer.strides[1]) 
+	for offset_x in range (0, limit_x, layer.strides[0]):
+		for offset_y in range (0, limit_y, layer.strides[1]):
 			for z in range (0, inputsnp.shape[3]):
-				max_value = float('-inf')
+				max_value = float('-inf');
 				for kernel_x in range (layer.pool_size[0]):
 					for kernel_y in range (layer.pool_size[1]):
-						x = offset_x + kernel_x 
-						y = offset_y + kernel_y 
-						if inputsnp.shape[1] > x and inputsnp.shape[2] > y: 							
-							if inputsnp[0][x][y][z] > max_value:
-								max_value = inputsnp[0][x][y][z]
-				x = offset_x // layer.pool_size[0]
-				y = offset_y // layer.pool_size[1]
-				if outputsnp.shape[1] > x and outputsnp.shape[2] > y: 
-					outputsnp[0][x][y][z] = max_value
+						kx = offset_x + kernel_x 
+						ky = offset_y + kernel_y
+						if inputsnp[0][kx][ky][z] > max_value: 
+							max_value = inputsnp[0][kx][ky][z]
+				x = offset_x // layer.strides[0]
+				y = offset_y // layer.strides[1]
+				resultnp[0][x][y][z] = max_value 
 
 	timer.stop() 
 	print(timer.elapsed()) 
-
-	eager_tensor = tf.convert_to_tensor(outputsnp, dtype=np.float32)
+	
+	np.testing.assert_array_almost_equal(outputsnp, resultnp, decimal=1)
+	
+	print('  Entropy')
+	print('    Input:', entropy(inputsnp)) 
+	print('    Output:', entropy(outputsnp)) 
+	
+	eager_tensor = tf.convert_to_tensor(resultnp, dtype=np.float32)
 	return eager_tensor
 
 
@@ -758,7 +769,7 @@ if __name__ == '__main__':
 	
 	if not train: 
 		if name == 'vgg16': test_files = ['dog.jpg'] 
-		elif name == 'alexnet': test_files = ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg']
+		elif name == 'alexnet': test_files = ['dog.jpg'] # ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg']
 		else: test_files = ['digit.jpg']
 		
 		for test_file in test_files: 
