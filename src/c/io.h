@@ -80,7 +80,6 @@ public:
 	}
     
 	void save(std::string const &file) {
-		std::cout << "Saving file: " << file << std::endl; 
 		std::ofstream ofs(file, std::ios::binary);
 		if (!ofs) {
 			throw std::system_error(

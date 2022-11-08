@@ -339,7 +339,7 @@ int pad_multiple(int value, int multiple) {
 }
 
 __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
-	printf("Matrix multiply\n"); 
+	printf("    Matrix multiply\n"); 
 	
 	// Convert h_B from row-wise to col-wise
 	int col_wise_shape[2] = { h_B->shape[1], h_B->shape[0] }; 
@@ -373,8 +373,8 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
         k_global = K * k_tiles,
         n_global = N * n_tiles;
 		
-	printf("Dimensions: (%d, %d) ; (%d, %d) ; (%d, %d)\n", h_A->shape[0], h_A->shape[1], h_B->shape[0], h_B->shape[1], h_C->shape[0], h_C->shape[1]);
-	printf("%d, %d, %d\n", m_global, k_global, n_global); 
+	printf("      Dimensions: (%d, %d) ; (%d, %d) ; (%d, %d)\n", h_A->shape[0], h_A->shape[1], h_B->shape[0], h_B->shape[1], h_C->shape[0], h_C->shape[1]);
+	printf("      M: %d, K: %d, N: %d\n", m_global, k_global, n_global); 
 
 	// Convert into equivalent arrays. 
     half* A = (half*)malloc(sizeof(half) * m_global * k_global);
@@ -405,13 +405,19 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
 	std::string file_name = "conv_data/conv" + std::to_string(conv_layer_counter++);
 	
 	RawDataset<half> input(A, m_global, k_global);
-	input.save(file_name + "_x.bin"); 
+	std::string input_file_name = file_name + "_x.bin"; 
+	std::cout << "      Saving file: " << input_file_name << std::endl; 
+	input.save(input_file_name); 
 	
 	RawDataset<half> weights(B, k_global, n_global); 
-	weights.save(file_name + "_w.bin");
+	std::string weights_file_name = file_name + "_w.bin"; 
+	std::cout << "      Saving file: " << weights_file_name << std::endl; 
+	weights.save(weights_file_name);
 	
-	RawDataset<float> bias(C, m_global, n_global); 
-	bias.save(file_name + "_b.bin");
+	RawDataset<float> bias(C, m_global, n_global);
+	std::string bias_file_name = file_name + "_b.bin"; 
+	std::cout << "      Saving file: " << bias_file_name << std::endl; 
+	bias.save(bias_file_name);
 #endif 
 	
     half* d_A; checkCudaErrors(cudaMalloc(&d_A, sizeof(half) * m_global * k_global));

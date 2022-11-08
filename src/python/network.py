@@ -71,8 +71,6 @@ def save_network(model, file_name):
 	layer_count = len(model.layers) - len([x for x in model.layers if x.__class__.__name__ in filtered_layers]) + (1 if model.layers[0].__class__.__name__ != 'InputLayer' else 0)
 	write_int(layer_count) 
 
-	print('Layers:', layer_count) 
-	
 	if model.layers[0].__class__.__name__ != 'InputLayer': 
 		write_int(0) # layer type  
 		write_int(0) # how many weights 
@@ -83,7 +81,6 @@ def save_network(model, file_name):
 		if name in filtered_layers: continue 
 		layer_type = layer_types.get(name)
 		write_int(layer_type)
-		print('Layer type:', layer_type) 
 		
 		if layer_type == layer_types['Conv2D'] or layer_type == layer_types['Dense']: 
 			activation_type = activation_types.get(layer.activation.__name__)

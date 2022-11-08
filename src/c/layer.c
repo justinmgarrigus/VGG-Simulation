@@ -92,7 +92,7 @@ void layer_convolutional_feedforward(layer* input_layer, layer* conv_layer) {
 }
 
 void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) { 
-	printf("--MaxPooling\n");
+	printf("  MaxPooling\n");
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
 	ndarray *output = ndarray_copy(pool_layer->outputs, cudaMemcpyDeviceToHost);
 	
@@ -120,16 +120,14 @@ void layer_max_pooling_feedforward(layer* input_layer, layer* pool_layer) {
 
 	pool_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice);
 	
-	printf("  Entropy\n"); 
-	printf("    Input entropy: %f\n", ndarray_entropy(input)); 
-	printf("    Output entropy: %f\n", ndarray_entropy(output));
+	printf("    Entropy: %f\n", ndarray_entropy(output));
 	
 	free(input); 
 	free(output); 
 }
 
 void layer_flatten_feedforward(layer* input_layer, layer* flatten_layer) { 
-	printf("--Flatten\n");
+	printf("  Flatten\n");
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
 	ndarray *output = ndarray_copy(flatten_layer->outputs, cudaMemcpyDeviceToHost); 
 	
@@ -152,7 +150,7 @@ void layer_dense_feedforward(layer* input_layer, layer* dense_layer) {
 }
 
 void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_layer) {
-	printf("--BatchNormalization\n"); 
+	printf("  BatchNormalization\n"); 
 	ndarray *input = ndarray_copy(input_layer->outputs, cudaMemcpyDeviceToHost); 
 	ndarray *output = ndarray_copy(batch_layer->outputs, cudaMemcpyDeviceToHost); 
 	
@@ -175,9 +173,7 @@ void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_laye
 	
 	batch_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
 	
-	printf("  Entropy\n"); 
-	printf("    Input entropy: %f\n", ndarray_entropy(input)); 
-	printf("    Output entropy: %f\n", ndarray_entropy(output)); 
+	printf("    Entropy: %f\n", ndarray_entropy(output)); 
 	
 	free(input); 
 	free(output);
