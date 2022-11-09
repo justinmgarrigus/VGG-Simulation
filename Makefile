@@ -77,9 +77,9 @@ json: pre-build
 	./bin/json_test data/imagenet_class_index.json
 
 clean: c-clean 
-	rm -f vgg
-	rm -f json_test 
-	rm -f obj/*.o
-	rm -f bin/*
-	rm -rf obj
-	rm -rf bin 
+	rm -rf obj 
+	rm -rf bin
+	rm -rf _app_cuda_version_*
+	rm -rf _cuobjdump_list_ptx_*
+	rm -rf *.ptx
+	rm -rf *.ptxas	

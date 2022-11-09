@@ -278,27 +278,22 @@ __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B,
 			B[i * k_global + j] = (half)0.0f;
 }
 
-#else 
-
-__global__ void arr_float2half(half* dest, float* src, int count) {
-	int index = blockIdx.x * blockDim.x + threadIdx.x; 
-	if (index > count) return; 
-	dest[index] = __float2half(src[index]); 
-}
+#else
 
 __global__ void transfer_arr(half* dest, float* src, 
 							 int dest_rows, int dest_cols, 
 							 int src_rows, int src_cols) 
 {
+	printf("      transfer_arr: (%d, %d, %d, %d)\n", dest_rows, dest_cols, src_rows, src_cols); 
 	for (int i = 0; i < src_rows; i++) {
 		for (int j = 0; j < src_cols; j++)
-			dest[i * dest_cols + j] = __float2half(src[i * src_cols + j]); 
+			dest[i * dest_cols + j] = (half)src[i * src_cols + j];
 		for (int j = src_cols; j < dest_cols; j++) 
-			dest[i * dest_cols + j] = 0; 
+			dest[i * dest_cols + j] = (half)0.0f; 
 	}
 	for (int i = src_rows; i < dest_rows; i++) 
 		for (int j = 0; j < dest_cols; j++) 
-			dest[i * dest_cols + j] = 0;
+			dest[i * dest_cols + j] = (half)0.0f;
 }
 
 // Cuda 9.1 does not support half values at all on the host, so we need to do 
@@ -306,8 +301,6 @@ __global__ void transfer_arr(half* dest, float* src,
 __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B, 
                                   int m_global, int k_global, int n_global) 
 {
-	const int thread_count = 1024; // TODO: this should be variable. 
-	
 	// Copy h_A and h_B to device
 	float *A_arr = nullptr; cudaMalloc(&A_arr, sizeof(float) * h_A->count); 
 	float *B_arr = nullptr; cudaMalloc(&B_arr, sizeof(float) * h_B->count); 

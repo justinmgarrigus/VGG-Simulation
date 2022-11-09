@@ -6,4 +6,7 @@ conv_data/
 *__pycache__*
 gpgpusim.config
 *.icnt
-test.*  
+_app_cuda_version_*
+_cuobjdump_list_ptx_*
+*.ptx
+*.ptxas  
