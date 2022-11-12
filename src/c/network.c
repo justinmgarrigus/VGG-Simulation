@@ -51,7 +51,7 @@ network* network_create(enum model_type type) {
 	else {
 		data_file = "data/vgg.nn"; 
 		label_file = "data/imagenet_labels.json"; 
-		model_name = "vgg16"; 
+		model_name = "vgg"; 
 	}
 	
 	printf("Creating network from file '%s' with labels '%s'\n", data_file, label_file); 

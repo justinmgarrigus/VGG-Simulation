@@ -9,4 +9,7 @@ gpgpusim.config
 _app_cuda_version_*
 _cuobjdump_list_ptx_*
 *.ptx
-*.ptxas  
+*.ptxas
+data/alexnet-keras
+vgg-conv-data
+alexnet-conv-data
