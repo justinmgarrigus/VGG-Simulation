@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h> 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h> 
+#include <dirent.h> 
 #include "network.h"
 #include "image.h" 
 
@@ -135,11 +139,45 @@ int main(int argc, char** argv) {
 		input = ndarray_create(4, length); 
 	}
 	
-	if (argc == 3) {
-		preprocess(argv[2], input); 
+#if defined(SAVE_INTERMEDIATE) 
+	conv_layer_counter = 1;  
+#endif 
 	
-		network_feedforward(network, input); printf("\n");
-		network_decode_output(network); 
+	if (argc == 3) {
+		char *path = argv[2]; 
+		struct stat path_stat; 
+		stat(path, &path_stat); 
+		
+		if (S_ISREG(path_stat.st_mode)) {
+			// The argument is just a regular file, not a directory.
+			preprocess(argv[2], input); 
+			network_feedforward(network, input); printf("\n");
+			network_decode_output(network);
+		}
+		else {
+			// The argument is a directory containing image files. 
+			DIR *d;
+			struct dirent *dir;
+			d = opendir(argv[2]); 
+			char buffer[256]; 
+			if (d) {
+				while ((dir = readdir(d)) != NULL) { 
+					if (dir->d_name[0] == '.')
+						continue; 
+					
+					conv_layer_counter = 1; 
+					sprintf(buffer, "%s/%s", argv[2], dir->d_name); 
+					preprocess(buffer, input); 
+					network_feedforward(network, input); printf("\n");
+					network_decode_output(network);
+					printf("\n\n"); 
+				}
+				closedir(d); 
+			}
+			else {
+				printf("Error opening directory: '%s'\n", argv[2]);
+			}
+		}
 	}
 	else {
 		printf("\n\n"); 

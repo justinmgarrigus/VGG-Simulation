@@ -174,6 +174,11 @@ void layer_batch_normalization_feedforward(layer* input_layer, layer* batch_laye
 	batch_layer->outputs = ndarray_copy(output, cudaMemcpyHostToDevice); 
 	
 	printf("    Entropy: %f\n", ndarray_entropy(output)); 
+	printf("      gamma: %f\n", ndarray_entropy(weights[0])); 
+	printf("      beta: %f\n", ndarray_entropy(weights[1])); 
+	printf("      running_mean: %f\n", ndarray_entropy(weights[2])); 
+	printf("      running_std: %f\n", ndarray_entropy(weights[3])); 
+	printf("      epsilon: %f\n", epsilon); 
 	
 	free(input); 
 	free(output);

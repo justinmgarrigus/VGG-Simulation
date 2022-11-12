@@ -3,9 +3,13 @@
 #include <string.h>
 #include <sys/stat.h>  
 #include <stdint.h> 
+#include <string.h> 
 #include "network.h"
 #include "ndarray.h"
 #include "json.h"
+
+int conv_layer_counter;
+char *model_name; 
 
 int32_t file_read_int(FILE* file, unsigned char* buffer) {
 	// Data is encoded in .nn files as 32-bit integers, but they can be saved as 16-bit
@@ -42,10 +46,12 @@ network* network_create(enum model_type type) {
 	if (type == model_alexnet) {
 		data_file = "data/alexnet.nn"; 
 		label_file = "data/alexnet_labels.json"; 
+		model_name = "alexnet"; 
 	}
 	else {
 		data_file = "data/vgg.nn"; 
 		label_file = "data/imagenet_labels.json"; 
+		model_name = "vgg16"; 
 	}
 	
 	printf("Creating network from file '%s' with labels '%s'\n", data_file, label_file); 
@@ -153,8 +159,10 @@ void network_decode_output(network* network) {
 	ND_TYPE scores[6] = { 0 };
 	char *labels[6] = { 0 };
  	
+	int count = (strcmp(model_name, "vgg16") == 0) ? 1000 : 10; 
+	
 	ndarray *output = ndarray_copy(network->layers[network->layer_count-1]->outputs, cudaMemcpyDeviceToHost); 
-	for (int label_index = 0; label_index < 1000 /* TODO */; label_index++) {
+	for (int label_index = 0; label_index < count; label_index++) {
 		ND_TYPE value = ndarray_get_val_param(output, 0, label_index); 
 		scores[0] = value; 
 		labels[0] = network->labels[label_index];
@@ -182,8 +190,10 @@ void network_free(network* network) {
 	for (int i = 0; i < network->layer_count; i++) 
 		layer_free(network->layers[i]);
 	free(network->layers);
+	
+	int count = (strcmp(model_name, "vgg16") == 0) ? 1000 : 10; 
 
-	for (int i = 0; i < 1000 /* TODO */; i++) 
+	for (int i = 0; i < count; i++) 
 		free(network->labels[i]); 
 	free(network->labels); 
 

@@ -66,10 +66,6 @@
 
 using namespace nvcuda;
 
-#if defined(SAVE_INTERMEDIATE) 
-	int conv_layer_counter = 1; 
-#endif 
-
 __global__ void compute_gemm(const half* A, const half* B, const float* C, float* D, int M_TILES, int N_TILES, int K_TILES) {
     extern __shared__ half shmem[][CHUNK_K * K + SKEW_HALF];
 
@@ -331,7 +327,7 @@ int pad_multiple(int value, int multiple) {
     return (value / multiple + 1) * multiple;
 }
 
-__host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
+__host__ void matrix_multiply(char* model_name, ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D) {
 	printf("    Matrix multiply\n"); 
 	
 	// Convert h_B from row-wise to col-wise
@@ -395,7 +391,8 @@ __host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray*
 			
 	// Save intermediate inputs to a file. 
 #if defined(SAVE_INTERMEDIATE)
-	std::string file_name = "conv_data/conv" + std::to_string(conv_layer_counter++);
+	std::string model_name_str = model_name; 
+	std::string file_name = model_name_str + "-conv-data/conv" + std::to_string(conv_layer_counter++);
 	
 	RawDataset<half> input(A, m_global, k_global);
 	std::string input_file_name = file_name + "_x.bin"; 

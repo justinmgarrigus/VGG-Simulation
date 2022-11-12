@@ -113,9 +113,10 @@
 
 extern "C" {
 	#include "ndarray.h" 
+	#include "network.h" 
 	
 	__host__ int pad_multiple(int value, int multiple);
-	__host__ void matrix_multiply(ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D);
+	__host__ void matrix_multiply(char* model_name, ndarray* h_A, ndarray* h_B, ndarray* h_C, ndarray* h_D);
 	__global__ void compute_gemm(const half* A, const half* B, const float* C, float* D, int M_TILES, int N_TILES, int K_TILES);
 }
 

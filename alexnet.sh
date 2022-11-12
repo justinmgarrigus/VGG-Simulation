@@ -4,8 +4,8 @@
 # our ability to do a complete performance test 
 if [[ $# -eq 0 ]] 
 then 
-	files=$(find vgg-conv-data -regex '.*[bwx]\.bin' | sort --version-sort) 
-	numbers=(0 0 0 0 0 0 0 0 0 0 0 0 0) # 13 elements (1 for each Conv2D)
+	files=$(find alexnet-conv-data -regex '.*[bwx]\.bin' | sort --version-sort) 
+	numbers=(0 0 0 0 0) # 5 elements (1 for each Conv2D)
 	for file in ${files}
 	do 
 		number=$(echo ${file} | tr -dc '0-9')
@@ -18,7 +18,7 @@ then
 	done 
 	
 	total=0
-	for index in {0..12}
+	for index in {0..4}
 	do 
 		subtotal=${numbers[${index}]} 
 		
@@ -33,7 +33,7 @@ then
 		fi 
 	done 
 	
-	if [[ total -eq 13 ]] 
+	if [[ total -eq 5 ]] 
 	then 
 		# All bin files are present
 		exit 0 
@@ -54,9 +54,9 @@ then
 			then 
 				echo Something went wrong 
 			else
-				input_file=$(find vgg-conv-data -regex ".*[^0-9]$1_x\.bin") 
-				weight_file=$(find vgg-conv-data -regex ".*[^0-9]$1_w\.bin") 
-				bias_file=$(find vgg-conv-data -regex ".*[^0-9]$1_b\.bin")
+				input_file=$(find alexnet-conv-data -regex ".*[^0-9]$1_x\.bin") 
+				weight_file=$(find alexnet-conv-data -regex ".*[^0-9]$1_w\.bin") 
+				bias_file=$(find alexnet-conv-data -regex ".*[^0-9]$1_b\.bin")
 				
 				./bin/gemm ${input_file} ${weight_file} ${bias_file}
 			fi 
@@ -68,24 +68,24 @@ then
 			./$0 > /dev/null 2>&1 # Runs ourself to ensure we have all bins 
 			if [[ $? -eq 0 ]] 
 			then
-				for index in {1..13}
+				for index in {1..5}
 				do  
 					gemm ${index} &
 				done 
 				
 				wait
 			else 
-				echo Missing bin files. Run "./vgg.sh <image.jpg>" to generate more
+				echo Missing bin files. Run "./alexnet.sh <image.jpg>" to generate more
 			fi 
 		else 
-			# Get the arguments that correspond to the argument
+			# Get the arguments that correspond to the argument 
 			gemm $1 
 		fi
 	
 	# Else if it is a jpg or ppm, process it as an input image 
-	elif [[ $1 =~ .+\.(jpg|ppm)$ ]]
+	elif [[ $1 =~ .+\.(jpg|ppm)$ || -d $1 ]]
 	then
-		./bin/vgg -vgg16 $1
+		./bin/vgg -alexnet $1
 	else 
 		echo Error: unknown arguments 
 	fi 

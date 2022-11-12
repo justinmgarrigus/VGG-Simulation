@@ -7,6 +7,7 @@
 
 extern "C" {
 	#include "layer_gpu.cuh" 
+	#include "network.h" 
 }
 
 // TODO move this to ndarray.c
@@ -120,7 +121,7 @@ __host__ void layer_convolutional_feedforward_gpu_setup_tensorcore(layer* input_
 	// Multiply img2col input by img2col kernel 
 	int output_col_shape[2] = { cols->shape[0], kernel_col->shape[1] }; 
 	ndarray *output_col = ndarray_create(2, output_col_shape);
-	matrix_multiply(cols, kernel_col, bias_col, output_col); 
+	matrix_multiply(model_name, cols, kernel_col, bias_col, output_col); 
 	
 	// Perform the activation function (relu) 
 	for (int i = 0; i < output_col->count; i++) {
@@ -261,7 +262,7 @@ void layer_dense_feedforward_gpu_setup_tensorcore(layer* input_layer, layer* den
 	for (int i = 0; i < output->count; i++)
 		output->arr[i] = 0;
 
-	matrix_multiply(input, weights, biases, output);
+	matrix_multiply(model_name, input, weights, biases, output);
 
 	switch (dense_layer->activation) {
 	case layer_activation_relu:

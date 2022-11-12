@@ -12,6 +12,7 @@ import random
 import math 
 import os 
 import timer 
+from tqdm import tqdm 
 
 np.random.seed(1000)
 
@@ -220,11 +221,41 @@ def create_alexnet(train=False):
 	validation_ds = (validation_ds.map(process_images).shuffle(buffer_size=train_ds_size).batch(batch_size=32, drop_remainder=True))
 	
 	if train or not os.path.exists('data/alexnet.nn'):
-		model.fit(train_ds, epochs=1, validation_data=validation_ds, validation_freq=1) 
+		model.fit(train_ds, epochs=50, validation_data=validation_ds, validation_freq=1) 
 		save_network(model, 'data/alexnet.nn') 
+		model.save('data/alexnet-keras')
 	else: 
-		load_network(model, 'data/alexnet.nn') 
-	
+		# load_network(model, 'data/alexnet.nn') # TODO: figure out how to fix this 
+		model = keras.models.load_model('data/alexnet-keras') 
+		(n_train_images, n_train_labels), (n_test_images, n_test_labels) = tf.keras.datasets.cifar10.load_data()
+		
+		correct = [] 
+		for i in range(10): correct.append([]) 
+		incorrect = [] 
+		for i in range(10): incorrect.append([]) 
+		print(len(correct), len(correct[0])) 
+		for i in tqdm(range(len(n_train_images))): 
+			image = n_train_images[i] 
+			image = tf.image.per_image_standardization(image) 
+			image = tf.image.resize(image, (227, 227))
+			image = image[np.newaxis, :] 
+			prediction = model(image)[0]
+			max_p = 0 
+			for p in range(len(prediction)): 
+				if prediction[p] > prediction[max_p]:
+					max_p = p
+			if max_p == n_train_labels[i] and prediction[max_p] > 0.95: 
+				correct[max_p].append(n_train_images[i])
+			else: 
+				incorrect[max_p].append(n_train_images[i]) 
+		
+		print(len(correct), len(incorrect)) 
+		for i in range(10): 
+			image = correct[i][int(random.random() * len(correct[i]))]
+			pilIm = Image.fromarray(image) 
+			pilIm.save(str(i) + '.jpg') 
+			
+		
 	model.evaluate(test_ds) 
 	
 	return model
@@ -420,6 +451,7 @@ def conv_2D_normal(layer, inputs):
 	timer.start() 
 	
 	dot_counter = 0 
+	resultnp = np.empty(shape=outputs.shape) 
 	for x in range(outputnp.shape[1]):
 		for y in range(outputnp.shape[2]):
 			result = 0 
@@ -432,22 +464,18 @@ def conv_2D_normal(layer, inputs):
 						for kernel_y in range(kernel_size[1]): 
 							for channel in range(inputsnp.shape[3]): 
 								result += kernel[kernel_x][kernel_y][channel][filter_index] * inputsnp[0][x * strides[0] + kernel_x][y * strides[1] + kernel_y][channel]
-					if result < 0: result = 0 
-					
-					if check_accuracy: 
-						# Compare expected vs actual value, exit if difference is too large 
-						expected = outputnp[0][x][y][filter_index] 
-						diff = abs(result - expected) 
-						if diff > epsilon:
-							print('Convolution incorrect!', result, expected, diff)
-							sys.exit(0) 
+					if result < 0: result = 0
 						
 					# Replace output with our own calculated value
-					outputnp[0][x][y][filter_index] = result
+					resultnp[0][x][y][filter_index] = result
+				else: 
+					resultnp[0][x][y][filter_index] = outputnp[0][x][y][filter_index] 
+	
+	np.testing.assert_array_almost_equal(outputnp, resultnp, decimal=1)
 	
 	timer.stop() 
 	print(timer.elapsed()) 
-	print('Dot products:', dot_counter) 
+	print('  Dot products:', dot_counter) 
 	return outputnp
 	
 
@@ -461,11 +489,11 @@ def conv_2D_tensorcore(layer, inputs):
 	weights = layer.weights[1].numpy() 
 	
 	print() 
-	print('Info:') 
-	print('  stride:', layer.strides[0]) 
-	print('  input shape:', inputsnp.shape) 
-	print('  output shape:', outputnp.shape) 
-	print('  kernel shape:', kernel.shape) 
+	print('  Info:') 
+	print('    stride:', layer.strides[0]) 
+	print('    input shape:', inputsnp.shape) 
+	print('    output shape:', outputnp.shape) 
+	print('    kernel shape:', kernel.shape) 
 	
 	if layer.padding == 'same': 
 		pad = (layer.kernel_size[0] - 1) // 2
@@ -485,11 +513,11 @@ def conv_2D_tensorcore(layer, inputs):
 	
 	np.testing.assert_array_almost_equal(outputnp, resultnp, decimal=1)
 	
-	print('Dot products:', input_adjusted.shape[0] * kernel_adjusted.shape[1])
-	print('Entropy:') 
-	print('  input_adjusted:', entropy(input_adjusted)) 
-	print('  result_col:', entropy(result_col)) 
-	print('  resultnp:', entropy(resultnp)) 
+	print('  Dot products:', input_adjusted.shape[0] * kernel_adjusted.shape[1])
+	print('  Entropy:') 
+	print('    input_adjusted:', entropy(input_adjusted)) 
+	print('    result_col:', entropy(result_col)) 
+	print('    resultnp:', entropy(resultnp)) 
 	
 	return resultnp
 	
@@ -546,52 +574,40 @@ def col2img(arr):
 
 	
 def batch_normalization(layer, inputs):
-	print('Batch normalization ', end='', flush=True)
+	print('Batch normalization')
 	outputs = layer(inputs)
 	outputsnp = outputs.numpy()
-	
-	return outputs # TODO: remove 
+	inputsnp = inputs if isinstance(inputs, np.ndarray) else inputs.numpy()
 	
 	gamma = layer.weights[0].numpy() 
 	beta = layer.weights[1].numpy() 
 	running_mean = layer.weights[2].numpy() 
 	running_std = layer.weights[3].numpy()
-	
-	if not override_probability: 
-		probability = (outputsnp.size / inputs.shape[3] * 30) / outputsnp.size 
+	epsilon = layer.epsilon
 	
 	result = np.empty(shape=inputs.shape) 
-	it = np.ndindex(result.shape) 
-	
-	timer.start() 
-	
-	for i in range(outputsnp.size // inputs.shape[3]):
-		if override_probability or random.random() < probability: 
-			for f in range(inputs.shape[3]): 
-				index = next(it)
-				result[index] = gamma[f] * (inputs[index] - running_mean[f]) / math.sqrt(running_std[f] + layer.epsilon) + beta[f]
-		else: 
-			for f in range(inputs.shape[3]): 
-				index = next(it) 
-				result[index] = outputsnp[index] 
-	
-	timer.stop() 
-	print(timer.elapsed())
+	for i in range(inputs.shape[1]): 
+		for j in range(inputs.shape[2]): 
+			for k in range(inputs.shape[3]): 
+				result[0, i, j, k] = gamma[k] * (inputsnp[0, i, j, k] - running_mean[k]) / math.sqrt(running_std[k] + epsilon) + beta[k]
 			
 	np.testing.assert_array_almost_equal(outputsnp, result, decimal=1)
 	
-	print('Input entropy:', entropy(inputs.numpy()), 'output entropy:', entropy(outputsnp)) 
+	print('  Entropy:', entropy(outputsnp))
+	print('    gamma:', entropy(gamma)) 
+	print('    beta:', entropy(beta)) 
+	print('    running_mean:', entropy(running_mean)) 
+	print('    running_std:', entropy(running_std)) 
+	print('    epsilon:', epsilon) 
 	return tf.convert_to_tensor(result, dtype=np.float32)
 
 
 def max_pooling(layer, inputs):
-	print('Max pooling ', end='', flush=True) 
+	print('Max pooling') 
 	outputs = layer(inputs)
 	inputsnp = inputs.numpy()
 	outputsnp = outputs.numpy()
 	resultnp = np.empty(shape=outputsnp.shape) 
-	
-	timer.start() 
 	
 	limit_x = inputsnp.shape[1] - (inputsnp.shape[1] % layer.strides[0]) 
 	limit_y = inputsnp.shape[2] - (inputsnp.shape[2] % layer.strides[1]) 
@@ -609,14 +625,9 @@ def max_pooling(layer, inputs):
 				y = offset_y // layer.strides[1]
 				resultnp[0][x][y][z] = max_value 
 
-	timer.stop() 
-	print(timer.elapsed()) 
-	
 	np.testing.assert_array_almost_equal(outputsnp, resultnp, decimal=1)
 	
-	print('  Entropy')
-	print('    Input:', entropy(inputsnp)) 
-	print('    Output:', entropy(outputsnp)) 
+	print('  Entropy:', entropy(resultnp)) 
 	
 	eager_tensor = tf.convert_to_tensor(resultnp, dtype=np.float32)
 	return eager_tensor
@@ -641,12 +652,11 @@ def flatten(layer, inputs):
 
 
 def dense(layer, inputs):
-	print('Dense ', end='', flush=True)
+	print('Dense')
+	outputsnp = layer(inputs).numpy() 
 	inputsnp = inputs.numpy()
 	weightsnp = layer.get_weights()[0]
 	biasnp = layer.get_weights()[1] 
-	
-	timer.start() 
 	
 	if use_tensorcore: 
 		result_array = np.matmul(inputs.numpy(), weightsnp) 
@@ -665,10 +675,10 @@ def dense(layer, inputs):
 	else: 
 		print('Unrecognized activation function:', layer.activation)
 		sys.exit(0)   
-		
-	timer.stop() 
-	print(timer.elapsed()) 
-
+	
+	print('  Entropy:', entropy(result_array))  
+	np.testing.assert_array_almost_equal(outputsnp, result_array, decimal=1)
+	
 	eager_tensor = tf.convert_to_tensor(result_array, dtype=np.float32)
 	return eager_tensor
 
@@ -679,6 +689,10 @@ def dropout(layer, inputs):
 	
 
 def top_prediction(pred, model_type):
+	print('Model:') 
+	for i in range(len(pred[0])):
+		print(' ', pred[0][i])
+	
 	if model_type == 'vgg16':
 		p = decode_predictions(pred) 
 		print(p[0][0]) 
@@ -766,7 +780,7 @@ if __name__ == '__main__':
 	
 	if not train: 
 		if name == 'vgg16': test_files = ['dog.jpg'] 
-		elif name == 'alexnet': test_files = ['dog.jpg'] # ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg']
+		elif name == 'alexnet': test_files = ['mini_dog.jpg'] # ['mini_dog.jpg', 'mini_horse.jpg', 'mini_car.jpg']
 		else: test_files = ['digit.jpg']
 		
 		for test_file in test_files: 

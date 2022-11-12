@@ -16,4 +16,10 @@ void network_free(network* network);
 void network_feedforward(network* network, ndarray* inputs); 
 void network_decode_output(network* network); 
 
+extern char *model_name; // Static (assumes only one network). TODO: think of a better solution than this. 
+
+#if defined(SAVE_INTERMEDIATE) 
+extern int conv_layer_counter; 
+#endif 
+
 #endif 
