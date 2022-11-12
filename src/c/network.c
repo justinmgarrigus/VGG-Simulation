@@ -159,7 +159,7 @@ void network_decode_output(network* network) {
 	ND_TYPE scores[6] = { 0 };
 	char *labels[6] = { 0 };
  	
-	int count = (strcmp(model_name, "vgg16") == 0) ? 1000 : 10; 
+	int count = (strcmp(model_name, "vgg") == 0) ? 1000 : 10; 
 	
 	ndarray *output = ndarray_copy(network->layers[network->layer_count-1]->outputs, cudaMemcpyDeviceToHost); 
 	for (int label_index = 0; label_index < count; label_index++) {
@@ -191,7 +191,7 @@ void network_free(network* network) {
 		layer_free(network->layers[i]);
 	free(network->layers);
 	
-	int count = (strcmp(model_name, "vgg16") == 0) ? 1000 : 10; 
+	int count = (strcmp(model_name, "vgg") == 0) ? 1000 : 10; 
 
 	for (int i = 0; i < count; i++) 
 		free(network->labels[i]); 
