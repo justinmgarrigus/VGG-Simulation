@@ -1,6 +1,12 @@
-FLAGS = -DTENSORCORE -DSAVE_INTERMEDIATE
-INCLUDES = -Ilib/Common -I/usr/local/cuda/include -Isrc/c -Isrc/gpu -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda-9.1/lib64/stubs" -L"/usr/local/cuda-9.1/lib64" 
+override FLAGS += -DTENSORCORE -DSAVE_INTERMEDIATE
+INCLUDES = -Ilib/Common -I/usr/local/cuda/include -Isrc/c -Isrc/gpu -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda-9.1/lib64/stubs" -L"/usr/local/cuda-9.1/lib64"
 MODEL = -vgg16 
+
+ifndef GPGPUSIM_ROOT 
+	echo 'ERROR: GPGPUSIM_ROOT NOT DEFINED!!!' 
+else 
+	INCLUDES += -I$(GPGPUSIM_ROOT)/src
+endif 
 
 .PHONY: internal-target external-target
 
@@ -30,6 +36,8 @@ libjpeg:
 	sudo make install
 	
 c-compile: pre-build
+	echo $(FLAGS)
+	echo $(INCLUDES) 
 	nvcc -o obj/c/vgg.o -c src/c/vgg.c $(FLAGS) $(INCLUDES) -arch=sm_70
 	gcc -o obj/c/network.o -c src/c/network.c -Ilib/json-parser $(FLAGS) $(INCLUDES)
 	gcc -o obj/c/layer.o -c src/c/layer.c $(FLAGS) $(INCLUDES)

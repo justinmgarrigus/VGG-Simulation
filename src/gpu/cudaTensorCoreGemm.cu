@@ -274,13 +274,33 @@ __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B,
 			B[i * k_global + j] = (half)0.0f;
 }
 
-#else
+#elif defined(USE_GPU_SIMULATOR) 
 
-__global__ void transfer_arr(half* dest, float* src, 
-							 int dest_rows, int dest_cols, 
-							 int src_rows, int src_cols) 
-{
-	printf("      transfer_arr: (%d, %d, %d, %d)\n", dest_rows, dest_cols, src_rows, src_cols); 
+__host__ void transfer_arr(half* dest, float* src, int dest_rows, int dest_cols, int src_rows, int src_cols) {
+	printf("      transfer_arr_cpu: (%d, %d, %d, %d)\n", dest_rows, dest_cols, src_rows, src_cols); 
+	half_float::detail::uint16 *dest_u = reinterpret_cast<half_float::detail::uint16*>(dest);
+	for (int i = 0; i < src_rows; i++) {
+		for (int j = 0; j < src_cols; j++)
+			dest_u[i * dest_cols + j] = half_float::detail::float2half<std::round_indeterminate, float>(src[i * src_cols + j]); 
+		for (int j = src_cols; j < dest_cols; j++) 
+			dest_u[i * dest_cols + j] = half_float::detail::float2half<std::round_indeterminate, float>(0.0f); 
+	}
+	for (int i = src_rows; i < dest_rows; i++) 
+		for (int j = 0; j < dest_cols; j++) 
+			dest_u[i * dest_cols + j] = half_float::detail::float2half<std::round_indeterminate, float>(0.0f);\
+}
+
+__host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B, 
+                                  int m_global, int k_global, int n_global) 
+{ 
+	transfer_arr(A, h_A->arr, m_global, k_global, h_A->shape[0], h_A->shape[1]); 
+	transfer_arr(B, h_B->arr, k_global, n_global, h_B->shape[0], h_B->shape[1]);
+}
+
+#else  
+
+__global__ void transfer_arr_kernel(half* dest, float* src, int dest_rows, int dest_cols, int src_rows, int src_cols) {
+	printf("      transfer_arr_kernel: (%d, %d, %d, %d)\n", dest_rows, dest_cols, src_rows, src_cols); 
 	for (int i = 0; i < src_rows; i++) {
 		for (int j = 0; j < src_cols; j++)
 			dest[i * dest_cols + j] = (half)src[i * src_cols + j];
@@ -306,8 +326,8 @@ __host__ void ndarray_to_half_arr(half* A, half* B, ndarray* h_A, ndarray* h_B,
 	// Reformat data to properly align with the gemm function 
 	half *A_re = nullptr; cudaMalloc(&A_re, sizeof(half) * m_global * k_global); 
 	half *B_re = nullptr; cudaMalloc(&B_re, sizeof(half) * k_global * n_global); 
-	transfer_arr<<<1,1>>>(A_re, A_arr, m_global, k_global, h_A->shape[0], h_A->shape[1]);
-	transfer_arr<<<1,1>>>(B_re, B_arr, k_global, n_global, h_B->shape[0], h_B->shape[1]);	
+	transfer_arr_kernel<<<1,1>>>(A_re, A_arr, m_global, k_global, h_A->shape[0], h_A->shape[1]);
+	transfer_arr_kernel<<<1,1>>>(B_re, B_arr, k_global, n_global, h_B->shape[0], h_B->shape[1]);	
 						  
 	// Copy reformatted data back to goal output 
     cudaMemcpy(A, A_re, sizeof(half) * m_global * k_global, cudaMemcpyDeviceToHost); 
@@ -409,7 +429,7 @@ __host__ void matrix_multiply(char* model_name, ndarray* h_A, ndarray* h_B, ndar
 	std::cout << "      Saving file: " << bias_file_name << std::endl; 
 	bias.save(bias_file_name);
 #endif 
-	
+
     half* d_A; checkCudaErrors(cudaMalloc(&d_A, sizeof(half) * m_global * k_global));
     half* d_B; checkCudaErrors(cudaMalloc(&d_B, sizeof(half) * k_global * n_global));
     float* d_C; checkCudaErrors(cudaMalloc(&d_C, sizeof(float) * m_global * n_global));

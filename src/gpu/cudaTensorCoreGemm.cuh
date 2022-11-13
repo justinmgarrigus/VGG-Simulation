@@ -111,6 +111,10 @@
 // we must keep each row and column 256-bit aligned, as required by nvcuda::wmma::load_matrix_sync.
 #define SKEW_HALF 16
 
+#if defined(USE_GPU_SIMULATOR)
+#include "cuda-sim/half.hpp"
+#endif
+
 extern "C" {
 	#include "ndarray.h" 
 	#include "network.h" 
