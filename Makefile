@@ -2,9 +2,7 @@ override FLAGS += -DTENSORCORE -DSAVE_INTERMEDIATE
 INCLUDES = -Ilib/Common -I/usr/local/cuda/include -Isrc/c -Isrc/gpu -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda-9.1/lib64/stubs" -L"/usr/local/cuda-9.1/lib64"
 MODEL = -vgg16 
 
-ifndef GPGPUSIM_ROOT 
-	echo 'ERROR: GPGPUSIM_ROOT NOT DEFINED!!!' 
-else 
+ifdef GPGPUSIM_ROOT 
 	INCLUDES += -I$(GPGPUSIM_ROOT)/src
 endif 
 
